@@ -24,19 +24,18 @@ echo "=== Verification ==="
 
 # Check HTML
 HTML=$(curl -s http://localhost:8088/)
-echo -n "v41 badge: "; echo "$HTML" | grep -q 'v41' && echo "✓ FOUND" || echo "✗ MISSING"
-echo -n "app.js?v=41: "; echo "$HTML" | grep -q 'app.js?v=41' && echo "✓ FOUND" || echo "✗ MISSING"
+echo -n "version badge: "; echo "$HTML" | grep -q 'v4[0-9]' && echo "✓ FOUND ($(echo "$HTML" | grep -o 'v4[0-9]' | head -1))" || echo "✗ MISSING"
+echo -n "app.js versioned: "; echo "$HTML" | grep -q 'app.js?v=4[0-9]' && echo "✓ FOUND ($(echo "$HTML" | grep -o 'app.js?v=4[0-9]' | head -1))" || echo "✗ MISSING"
 echo -n "full-screen (no max-width): "; echo "$HTML" | grep -q 'max-width: 480' && echo "✗ OLD LAYOUT" || echo "✓ CORRECT"
-echo -n "opacity transition: "; echo "$HTML" | grep -q 'opacity 0.5s ease' && echo "✓ FOUND" || echo "✗ MISSING"
+echo -n "no page-turn CSS: "; echo "$HTML" | grep -q 'view-perspective' && echo "✗ STILL PRESENT" || echo "✓ CLEAN"
 
 # Check JS
 JS=$(curl -s http://localhost:8088/app.js)
 echo -n "SW disabled: "; echo "$JS" | grep -q 'DISABLED for development' && echo "✓ YES" || echo "✗ SW STILL ACTIVE"
-echo -n "COMPLETE_PCT=0.50: "; echo "$JS" | grep -q 'COMPLETE_PCT = 0.50' && echo "✓ YES" || echo "✗ NO"
-echo -n "velocity logic: "; echo "$JS" | grep -q 'effectiveAngle' && echo "✓ YES" || echo "✗ NO"
+echo -n "switchTab simple: "; echo "$JS" | grep -q 'function switchTab' && echo "✓ EXISTS" || echo "✗ MISSING"
+echo -n "no page-turn refs: "; echo "$JS" | grep -q 'setupSwipe' && echo "✗ STILL PRESENT" || echo "✓ CLEAN"
 
 echo ""
 echo "=== Ready ==="
 echo "Open: http://192.168.31.102:8088"
-echo "Look for red 'v41' badge next to the title."
-echo "Swipe should need 50%+ drag to flip (was 25%)."
+echo "Look for red version badge in top-right corner to confirm latest code."

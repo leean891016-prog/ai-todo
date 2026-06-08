@@ -1219,17 +1219,22 @@ async function subscribeToPush() {
   }
 
   try {
-    // Get or register Service Worker with timeout
-    let reg;
-    try {
-      reg = await Promise.race([
-        navigator.serviceWorker.ready,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready timeout')), 10000))
-      ]);
-    } catch {
-      // If SW isn't ready, try registering it explicitly
+    // Ensure Service Worker is active
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
       reg = await navigator.serviceWorker.register('sw.js');
-      await navigator.serviceWorker.ready;
+    }
+    // Wait for SW activation with timeout
+    if (!reg.active) {
+      await new Promise((resolve, reject) => {
+        const start = Date.now();
+        const check = () => {
+          if (reg.active) return resolve();
+          if (Date.now() - start > 15000) return reject(new Error('SW激活超时'));
+          setTimeout(check, 300);
+        };
+        check();
+      });
     }
 
     let sub = await reg.pushManager.getSubscription();
@@ -1389,22 +1394,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // === Service Worker ===
+  // === Service Worker (minimal) ===
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      navigator.serviceWorker.addEventListener('message', (e) => {
-        if (e.data && e.data.type === 'NEW_VERSION') { window.location.reload(); }
-      });
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            newWorker.postMessage('skipWaiting');
-          }
-        });
-      });
-    });
-    setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
+    navigator.serviceWorker.register('sw.js');
   }
 
   // === Menu Toggle ===
