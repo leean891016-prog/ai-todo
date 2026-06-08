@@ -71,18 +71,25 @@ body {
 }
 .view-page {
   position: relative;
-  transform-origin: left center;
   backface-visibility: hidden;
+  transition: transform 0.4s cubic-bezier(0.2, 0.0, 0.0, 1),
+              filter 0.4s cubic-bezier(0.2, 0.0, 0.0, 1);
+}
+.view-page.dragging {
+  transition: none !important;
+}
+.view-page.spring-back {
+  transition: transform 0.25s cubic-bezier(0.3, 0.0, 0.0, 1),
+              filter 0.25s cubic-bezier(0.3, 0.0, 0.0, 1);
 }
 .view-page::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(to right, rgba(0,0,0,0) 85%, rgba(0,0,0,0.12) 100%);
-  opacity: 0; pointer-events: none;
-  transition: opacity 0.15s;
+  background: linear-gradient(to right, rgba(0,0,0,0) 85%, rgba(0,0,0,0.15) 100%);
+  opacity: var(--shadow-opacity, 0); pointer-events: none;
 }
 .view-page.turning-out::after,
 .view-page.turning-out-back::after {
-  opacity: 1;
+  --shadow-opacity: 1;
 }
 .view-page.turning-out {
   transform-origin: left center;
@@ -616,6 +623,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=32"></script>
+<script src="app.js?v=33"></script>
 </body>
 </html>

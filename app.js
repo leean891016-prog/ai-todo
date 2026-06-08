@@ -1684,9 +1684,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // === Font Switcher ===
   const FONT_KEY = 'ai-todo-font';
   const fonts = [
-    { id: 'default', name: '系统默认', sample: '字体随主题变化，清爽现代', stack: '' },
-    { id: 'song',    name: '宋体',     sample: '书卷气，温润典雅', stack: '"Songti SC", "Noto Serif SC", "STSong", serif' },
-    { id: 'kai',     name: '楷体',     sample: '手写感，自然舒展', stack: '"Kaiti SC", "STKaiti", "AR PL UKai CN", serif' },
+    { id: 'default', name: '系统默认', sample: '跟随主题，清爽现代', stack: '' },
+    { id: 'song',    name: '宋体',     sample: '书卷气，温润典雅', stack: '"Songti SC", "Noto Serif SC", "STSong", "SimSun", serif' },
+    { id: 'kai',     name: '楷体',     sample: '手写感，自然舒展', stack: '"Kaiti SC", "STKaiti", "KaiTi", "AR PL UKai CN", serif' },
+    { id: 'hei',     name: '黑体',     sample: '简洁有力，现代商务', stack: '"Heiti SC", "STHeitiSC", "SimHei", "Noto Sans SC", "Microsoft YaHei", sans-serif' },
+    { id: 'fangsong',name: '仿宋',     sample: '纤细雅致，公文书卷', stack: '"STFangsong", "FangSong", "FangSong_GB2312", "Noto Serif SC", serif' },
+    { id: 'yuan',    name: '圆体',     sample: '圆润温和，亲和力强', stack: '"STYuanti-SC", "Yuanti SC", "PingFang SC", "Noto Sans SC", sans-serif' },
+    { id: 'xingkai', name: '行楷',     sample: '潇洒流畅，半行半楷', stack: '"Xingkai SC", "STKaiti", "KaiTi", "AR PL UKai CN", serif' },
+    { id: 'hanzi',   name: '翩翩体',   sample: '轻快灵巧，钢笔手写', stack: '"HanziPen SC", "STKaiti", "KaiTi", serif' },
+    { id: 'hanno',   name: '手札体',   sample: '质朴自然，书法笔记', stack: '"Hannotate SC", "STKaiti", "KaiTi", serif' },
+    { id: 'weibei',  name: '魏碑',     sample: '刚劲有力，碑刻风骨', stack: '"Weibei SC", "STSong", "SimSun", "Noto Serif SC", serif' },
   ];
 
   function getFont() { return localStorage.getItem(FONT_KEY) || 'default'; }
@@ -1816,24 +1823,140 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
-  // === Swipe navigation ===
+  // === Swipe navigation (interactive page-turn like iReader) ===
   (function setupSwipe() {
-    const tabs = ['inspiration', 'daily', 'projects'];
-    let startX = 0, startY = 0;
-    const app = document.querySelector('.app');
-    if (!app) return;
-    app.addEventListener('touchstart', (e) => {
+    var tabs = ['inspiration', 'daily', 'projects'];
+    var MAX_DRAG = 280;
+    var LOCK_THRESHOLD = 10;
+    var COMPLETE_THRESHOLD = 40;
+
+    var startX = 0, startY = 0;
+    var isSwiping = false;
+    var swipeDir = null;
+    var targetTab = null;
+    var settling = false;
+
+    var view = document.getElementById('viewContent');
+    var back = document.getElementById('viewBack');
+    var app = document.querySelector('.app');
+    if (!app || !view) return;
+
+    function resetDrag() {
+      isSwiping = false;
+      swipeDir = null;
+      targetTab = null;
+      settling = false;
+      view.classList.remove('dragging', 'spring-back');
+      view.style.transform = '';
+      view.style.filter = '';
+      view.style.transformOrigin = '';
+      view.style.setProperty('--shadow-opacity', '0');
+      back.innerHTML = '';
+    }
+
+    function preRenderTarget(tab) {
+      var savedHTML = view.innerHTML;
+      var savedTab = currentTab;
+      var savedTitle = document.getElementById('headerTitle').textContent;
+      var savedBack = document.getElementById('backBtn').style.display;
+      currentTab = tab;
+      render();
+      back.innerHTML = view.innerHTML.replace(/\s+id="[^"]*"/g, '');
+      view.innerHTML = savedHTML;
+      currentTab = savedTab;
+      document.getElementById('headerTitle').textContent = savedTitle;
+      document.getElementById('backBtn').style.display = savedBack;
+    }
+
+    app.addEventListener('touchstart', function(e) {
+      if (settling) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      isSwiping = false;
+      swipeDir = null;
+      targetTab = null;
     }, { passive: true });
-    app.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      const dy = e.changedTouches[0].clientY - startY;
-      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-      if (currentProjectId) return;
-      const idx = tabs.indexOf(currentTab);
-      if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]);
-      else if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]);
+
+    app.addEventListener('touchmove', function(e) {
+      if (settling || currentProjectId) return;
+
+      var dx = e.changedTouches[0].clientX - startX;
+      var dy = e.changedTouches[0].clientY - startY;
+
+      if (!isSwiping) {
+        if (Math.abs(dx) < LOCK_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
+
+        var idx = tabs.indexOf(currentTab);
+        if (dx < 0 && idx < tabs.length - 1) {
+          swipeDir = 'forward';
+          targetTab = tabs[idx + 1];
+        } else if (dx > 0 && idx > 0) {
+          swipeDir = 'backward';
+          targetTab = tabs[idx - 1];
+        } else {
+          return;
+        }
+
+        isSwiping = true;
+        view.classList.add('dragging');
+        preRenderTarget(targetTab);
+      }
+
+      if (!isSwiping) return;
+      e.preventDefault();
+
+      var angle = (dx / MAX_DRAG) * 90;
+      if (swipeDir === 'forward') {
+        angle = Math.max(-90, Math.min(0, angle));
+        view.style.transformOrigin = 'left center';
+      } else {
+        angle = Math.max(0, Math.min(90, angle));
+        view.style.transformOrigin = 'right center';
+      }
+
+      var absAngle = Math.abs(angle);
+      view.style.transform = 'rotateY(' + angle + 'deg)';
+      view.style.filter = 'brightness(' + (1 - absAngle / 200) + ')';
+      view.style.setProperty('--shadow-opacity', String(absAngle / 90));
+    }, { passive: false });
+
+    app.addEventListener('touchend', function(e) {
+      if (!isSwiping || settling) { resetDrag(); return; }
+
+      var dx = e.changedTouches[0].clientX - startX;
+      var angle = (dx / MAX_DRAG) * 90;
+      if (swipeDir === 'forward') angle = Math.max(-90, Math.min(0, angle));
+      else angle = Math.max(0, Math.min(90, angle));
+
+      var absAngle = Math.abs(angle);
+      view.classList.remove('dragging');
+
+      if (absAngle > COMPLETE_THRESHOLD) {
+        settling = true;
+        var targetAngle = swipeDir === 'forward' ? -90 : 90;
+        view.style.transform = 'rotateY(' + targetAngle + 'deg)';
+        view.style.filter = 'brightness(0.55)';
+        view.style.setProperty('--shadow-opacity', '1');
+
+        view.addEventListener('transitionend', function finish() {
+          view.removeEventListener('transitionend', finish);
+          currentTab = targetTab;
+          currentProjectId = null;
+          document.querySelectorAll('.tab-bar button').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === targetTab); });
+          render();
+          resetDrag();
+        });
+      } else {
+        view.classList.add('spring-back');
+        view.style.transform = 'rotateY(0deg)';
+        view.style.filter = 'brightness(1)';
+        view.style.setProperty('--shadow-opacity', '0');
+
+        view.addEventListener('transitionend', function bounce() {
+          view.removeEventListener('transitionend', bounce);
+          resetDrag();
+        });
+      }
     });
   })();
 });
