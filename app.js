@@ -1714,23 +1714,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     const current = getFont();
     list.innerHTML = fonts.map(f => `
       <div class="font-opt${f.id === current ? ' active' : ''}" data-font="${f.id}">
-        <div class="font-preview" style="font-family:${f.stack || 'inherit'}">字</div>
-        <div class="font-info">
-          <div class="font-name">${f.name}</div>
-          <div class="font-sample" style="font-family:${f.stack || 'inherit'}">${f.sample}</div>
-        </div>
+        <span class="font-name">${f.name}</span>
+        <span class="font-sample" style="font-family:${f.stack || 'inherit'}">${f.sample}</span>
       </div>`).join('');
     list.querySelectorAll('.font-opt').forEach(el => {
       el.addEventListener('click', () => setFont(el.dataset.font));
     });
   }
 
-  document.getElementById('fontBtn').addEventListener('click', () => {
+  function showFontOverlay() {
     renderFontList();
     document.getElementById('fontOverlay').classList.add('show');
-  });
+    document.body.classList.add('no-scroll');
+  }
+  function hideFontOverlay() {
+    document.getElementById('fontOverlay').classList.remove('show');
+    document.body.classList.remove('no-scroll');
+  }
+
+  document.getElementById('fontBtn').addEventListener('click', showFontOverlay);
   document.getElementById('fontOverlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) document.getElementById('fontOverlay').classList.remove('show');
+    if (e.target === e.currentTarget) hideFontOverlay();
   });
 
   // Apply saved font on load
@@ -1823,58 +1827,71 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
-  // === Swipe navigation (interactive page-turn like iReader) ===
+  // === Swipe navigation (interactive page-turn) ===
   (function setupSwipe() {
     var tabs = ['inspiration', 'daily', 'projects'];
-    var MAX_DRAG = 280;
-    var LOCK_THRESHOLD = 10;
-    var COMPLETE_THRESHOLD = 40;
+    var MAX_DRAG = 300;
+    var LOCK_THRESHOLD = 8;
+    var COMPLETE_THRESHOLD = 28;
 
     var startX = 0, startY = 0;
+    var lastMoveX = 0, lastMoveTime = 0;
     var isSwiping = false;
+    var settling = false;
     var swipeDir = null;
     var targetTab = null;
-    var settling = false;
+    var preRendered = false;
 
     var view = document.getElementById('viewContent');
     var back = document.getElementById('viewBack');
+    var fold = document.getElementById('foldShadow');
     var app = document.querySelector('.app');
     if (!app || !view) return;
 
-    function resetDrag() {
+    function fullCleanup() {
+      settling = false;
       isSwiping = false;
       swipeDir = null;
       targetTab = null;
-      settling = false;
+      preRendered = false;
+      view.style.transition = '';
       view.classList.remove('dragging', 'spring-back');
       view.style.transform = '';
       view.style.filter = '';
       view.style.transformOrigin = '';
       view.style.setProperty('--shadow-opacity', '0');
+      back.style.setProperty('--back-shadow', '0');
+      back.className = 'view-page-back';
       back.innerHTML = '';
+      if (fold) { fold.className = 'fold-shadow'; fold.style.opacity = ''; }
     }
 
-    function preRenderTarget(tab) {
+    function preRenderTarget() {
+      if (preRendered) return;
+      preRendered = true;
       var savedHTML = view.innerHTML;
       var savedTab = currentTab;
       var savedTitle = document.getElementById('headerTitle').textContent;
-      var savedBack = document.getElementById('backBtn').style.display;
-      currentTab = tab;
+      var savedBackBtn = document.getElementById('backBtn').style.display;
+      currentTab = targetTab;
       render();
       back.innerHTML = view.innerHTML.replace(/\s+id="[^"]*"/g, '');
       view.innerHTML = savedHTML;
       currentTab = savedTab;
       document.getElementById('headerTitle').textContent = savedTitle;
-      document.getElementById('backBtn').style.display = savedBack;
+      document.getElementById('backBtn').style.display = savedBackBtn;
     }
 
     app.addEventListener('touchstart', function(e) {
       if (settling) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
+      lastMoveX = startX;
+      lastMoveTime = Date.now();
       isSwiping = false;
       swipeDir = null;
       targetTab = null;
+      preRendered = false;
     }, { passive: true });
 
     app.addEventListener('touchmove', function(e) {
@@ -1893,17 +1910,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         } else if (dx > 0 && idx > 0) {
           swipeDir = 'backward';
           targetTab = tabs[idx - 1];
-        } else {
-          return;
-        }
+        } else { return; }
 
         isSwiping = true;
         view.classList.add('dragging');
-        preRenderTarget(targetTab);
+        // Set up shadow classes once
+        if (swipeDir === 'forward') {
+          if (fold) fold.className = 'fold-shadow forward';
+          back.className = 'view-page-back shadow-right';
+        } else {
+          if (fold) fold.className = 'fold-shadow backward';
+          back.className = 'view-page-back shadow-left';
+        }
+        // Defer heavy render so this frame stays smooth
+        setTimeout(preRenderTarget, 0);
+        // Continue to apply drag this frame (no return!)
       }
 
-      if (!isSwiping) return;
       e.preventDefault();
+      lastMoveX = e.changedTouches[0].clientX;
+      lastMoveTime = Date.now();
 
       var angle = (dx / MAX_DRAG) * 90;
       if (swipeDir === 'forward') {
@@ -1916,45 +1942,59 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       var absAngle = Math.abs(angle);
       view.style.transform = 'rotateY(' + angle + 'deg)';
-      view.style.filter = 'brightness(' + (1 - absAngle / 200) + ')';
+      view.style.filter = 'brightness(' + (1 - absAngle / 180) + ')';
       view.style.setProperty('--shadow-opacity', String(absAngle / 90));
+      back.style.setProperty('--back-shadow', String(absAngle / 90));
+      if (fold) fold.style.opacity = String(Math.min(1, absAngle / 25));
     }, { passive: false });
 
     app.addEventListener('touchend', function(e) {
-      if (!isSwiping || settling) { resetDrag(); return; }
+      if (!isSwiping || settling) { fullCleanup(); return; }
 
       var dx = e.changedTouches[0].clientX - startX;
+      var dt = Math.max(1, Date.now() - lastMoveTime);
+      var velocity = (e.changedTouches[0].clientX - lastMoveX) / dt;
+
       var angle = (dx / MAX_DRAG) * 90;
       if (swipeDir === 'forward') angle = Math.max(-90, Math.min(0, angle));
       else angle = Math.max(0, Math.min(90, angle));
 
-      var absAngle = Math.abs(angle);
+      var effectiveAngle = Math.abs(angle) + Math.abs(velocity) * 60;
       view.classList.remove('dragging');
 
-      if (absAngle > COMPLETE_THRESHOLD) {
+      if (effectiveAngle > COMPLETE_THRESHOLD) {
         settling = true;
         var targetAngle = swipeDir === 'forward' ? -90 : 90;
         view.style.transform = 'rotateY(' + targetAngle + 'deg)';
-        view.style.filter = 'brightness(0.55)';
+        view.style.filter = 'brightness(0.5)';
         view.style.setProperty('--shadow-opacity', '1');
+        back.style.setProperty('--back-shadow', '1');
 
-        view.addEventListener('transitionend', function finish() {
+        view.addEventListener('transitionend', function finish(e) {
+          if (e.propertyName !== 'transform') return;
           view.removeEventListener('transitionend', finish);
+          // Instantly snap back (no transition) to avoid visual jump
+          view.style.transition = 'none';
+          view.style.transform = '';
+          view.style.filter = '';
           currentTab = targetTab;
           currentProjectId = null;
           document.querySelectorAll('.tab-bar button').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === targetTab); });
           render();
-          resetDrag();
+          requestAnimationFrame(function() { fullCleanup(); });
         });
       } else {
+        settling = true;
         view.classList.add('spring-back');
         view.style.transform = 'rotateY(0deg)';
         view.style.filter = 'brightness(1)';
         view.style.setProperty('--shadow-opacity', '0');
+        back.style.setProperty('--back-shadow', '0');
 
-        view.addEventListener('transitionend', function bounce() {
+        view.addEventListener('transitionend', function bounce(e) {
+          if (e.propertyName !== 'transform') return;
           view.removeEventListener('transitionend', bounce);
-          resetDrag();
+          fullCleanup();
         });
       }
     });
