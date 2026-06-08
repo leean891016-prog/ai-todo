@@ -1308,19 +1308,33 @@ async function syncRemindersToBackend(silent) {
 }
 
 async function syncRemindersWithSub(sub, silent) {
+  const deviceId = getDeviceId();
   const todos = loadTodos();
   const reminders = todos
     .filter(t => !t.completed && t.reminderTime && t.reminderDate)
     .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
-  const resp = await fetch(PUSH_WORKER_URL + '/api/sync', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
-  });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  const result = await resp.json();
-  if (!result.ok) throw new Error(result.error || '后端错误');
-  if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
+  console.log('[sync] deviceId:', deviceId, 'reminders:', reminders.length, 'sub:', !!sub);
+
+  // 10s timeout — Cloudflare Workers 在国内可能慢
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    const resp = await fetch(PUSH_WORKER_URL + '/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId, subscription: sub.toJSON(), reminders }),
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const result = await resp.json();
+    if (!result.ok) throw new Error(result.error || '后端错误');
+    if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
+  } catch (e) {
+    clearTimeout(timer);
+    if (e.name === 'AbortError') throw new Error('同步超时(10s)');
+    throw e;
+  }
 }
 
 // ========== Push Setup (user-triggered) ==========
