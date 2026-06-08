@@ -484,6 +484,16 @@ function priorityDot(todo) {
 }
 
 function prioritySort(a, b) {
+  // Time-based: nearest deadline first. Items without a time go last.
+  const aHasTime = a.reminderTime && a.reminderDate === getToday();
+  const bHasTime = b.reminderTime && b.reminderDate === getToday();
+  if (aHasTime && !bHasTime) return -1;
+  if (!aHasTime && bHasTime) return 1;
+  if (aHasTime && bHasTime) {
+    const cmp = a.reminderTime.localeCompare(b.reminderTime);
+    if (cmp !== 0) return cmp;
+  }
+  // Same time status → by priority
   const order = { urgent: 0, important: 1, null: 2 };
   return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
 }
@@ -938,8 +948,9 @@ async function fetchAIPrioritySort() {
   }));
 
   const systemPrompt =
-    '你是待办优先级排序助手。根据待办内容、截止时间、已延期次数、用户手标的优先级，给出今天的建议排序。\n' +
-    '排序规则：重要且紧急 > 已延期3次以上 > 重要且明天截止 > 重要 > 其他。\n' +
+    '你是待办优先级排序助手。根据待办的时间紧迫度和重要程度，给出今天的执行顺序建议。\n' +
+    '核心规则：截止时间越近的越靠前（今天10:00 > 今天16:00 > 明天）。时间排第一优先级。\n' +
+    '同等时间下：重要且紧急 > 已延期3次以上 > 重要 > 其他。没有截止时间的排在最后。\n' +
     '返回JSON，不要其他内容：{"order":["id1","id2",...],"reason":"一句话建议"}\n' +
     '只排序，不增删。';
 
