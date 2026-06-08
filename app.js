@@ -228,11 +228,33 @@ let currentProjectId = null;
 let showReport = false;
 
 function switchTab(tab) {
-  currentTab = tab;
-  currentProjectId = null;
-  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  render();
+  if (tab === currentTab) return;
+  const view = document.getElementById('viewContent');
+  if (!view || isAnimating) { currentTab = tab; render(); return; }
+  isAnimating = true;
+
+  view.classList.add('turning-out');
+  view.addEventListener('animationend', function handler() {
+    view.removeEventListener('animationend', handler);
+    view.classList.remove('turning-out');
+
+    currentTab = tab;
+    currentProjectId = null;
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    render();
+
+    requestAnimationFrame(() => {
+      view.classList.add('turning-in');
+      view.addEventListener('animationend', function h2() {
+        view.removeEventListener('animationend', h2);
+        view.classList.remove('turning-in');
+        isAnimating = false;
+      });
+    });
+  });
 }
+
+let isAnimating = false;
 
 // ========== Todo CRUD ==========
 
