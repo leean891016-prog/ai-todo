@@ -1219,7 +1219,19 @@ async function subscribeToPush() {
   }
 
   try {
-    const reg = await navigator.serviceWorker.ready;
+    // Get or register Service Worker with timeout
+    let reg;
+    try {
+      reg = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SW ready timeout')), 10000))
+      ]);
+    } catch {
+      // If SW isn't ready, try registering it explicitly
+      reg = await navigator.serviceWorker.register('sw.js');
+      await navigator.serviceWorker.ready;
+    }
+
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
