@@ -1,21 +1,16 @@
 [build]
-  command = "echo 'no build'"
-  publish = "."
+  command = "mkdir -p dist && echo 'ai-todo push backend' > dist/index.html"
+  publish = "dist"
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["@netlify/blobs"]
 
   [functions.cron]
     schedule = "* * * * *"
-    node_bundler = "esbuild"
 
   [functions.sync]
-    node_bundler = "esbuild"
 
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/sync"
   status = 200
-
-# Static files served normally — no catch-all redirect needed
