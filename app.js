@@ -1213,8 +1213,7 @@ function render() {
 
 // ========== Push Notifications ==========
 
-// Will be set once Cloudflare Worker is deployed
-let PUSH_WORKER_URL = null;
+const PUSH_WORKER_URL = 'https://ai-todo-push.leean891016.workers.dev';
 
 const VAPID_PUBLIC_KEY = 'BO8R1QOlLq7U_Ro6dnUm_2XnEESRSsQ84pff0HCkNEjvuEHAMR-6Hvm81NtPAjksRtfeHUaLLUGQsLSuNW5Fasg';
 
