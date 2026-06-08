@@ -1,7 +1,7 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v6';
+const VERSION = 'v7';
 const CACHE = 'ai-todo-' + VERSION;
-const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192.png', 'icon-512.png'];
+const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192-v2.png', 'icon-512-v2.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
