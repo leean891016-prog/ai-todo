@@ -533,8 +533,8 @@ function switchTab(tab) {
   // Animate fold shadow
   if (shadow) {
     shadow.style.background = forward
-      ? 'linear-gradient(to left, rgba(0,0,0,0.12), transparent 50%)'
-      : 'linear-gradient(to right, rgba(0,0,0,0.12), transparent 50%)';
+      ? 'linear-gradient(to left, rgba(0,0,0,0.25), transparent 40%)'
+      : 'linear-gradient(to right, rgba(0,0,0,0.25), transparent 40%)';
     shadow.classList.add('active');
   }
 
@@ -1465,9 +1465,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // === Swipe navigation (interactive page-turn with underlying page reveal) ===
   (function setupSwipe() {
     var tabs = ['inspiration', 'daily', 'projects'];
-    var MAX_DRAG = 300;
-    var THRESHOLD = 10;
-    var COMPLETE_PCT = 0.35;
+    var MAX_DRAG = 280;
+	    var THRESHOLD = 8;
+	    var COMPLETE_PCT = 0.25;
 
     var startX = 0, startY = 0;
     var swiping = false;
@@ -1556,13 +1556,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       else angle = Math.max(0, angle);
 
       var absAngle = Math.abs(angle);
-	      view.style.transform = 'rotateY(' + angle + 'deg) scaleX(' + (1 - absAngle * 0.001) + ')';
-	      view.style.opacity = 1 - absAngle / 130;
+	      view.style.transform = 'rotateY(' + angle + 'deg) scaleX(' + (1 - absAngle * 0.003) + ')';
+	      view.style.opacity = 1 - absAngle / 120;
 	      if (shadowEl && back.innerHTML) {
-	        shadowEl.style.opacity = absAngle / 88;
+	        shadowEl.style.opacity = Math.min(1, absAngle / 50);
 	        shadowEl.style.background = direction === 'forward'
-	          ? 'linear-gradient(to left, rgba(0,0,0,0.12), transparent 50%)'
-	          : 'linear-gradient(to right, rgba(0,0,0,0.12), transparent 50%)';
+	          ? 'linear-gradient(to left, rgba(0,0,0,0.25), transparent 40%)'
+	          : 'linear-gradient(to right, rgba(0,0,0,0.25), transparent 40%)';
 	      }
     }, { passive: false });
 
@@ -1580,7 +1580,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (pct > COMPLETE_PCT) {
         settling = true;
         var target = direction === 'forward' ? -88 : 88;
-        view.style.transform = 'rotateY(' + target + 'deg) scaleX(0.9)';
+        view.style.transform = 'rotateY(' + target + 'deg) scaleX(0.82)';
 	        view.style.opacity = '0.25';
 
         view.addEventListener('transitionend', function finish(e) {
