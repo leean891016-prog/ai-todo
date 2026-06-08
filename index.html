@@ -485,6 +485,40 @@ body {
   border-radius: var(--radius); background: var(--bg); color: var(--warn);
   font-size: 14px; cursor: pointer;
 }
+
+/* Priority menu */
+.priority-menu-overlay {
+  position: fixed; inset: 0; z-index: 2200; background: rgba(0,0,0,0.3);
+  display: none; align-items: flex-end; justify-content: center;
+  padding-bottom: 40px;
+}
+.priority-menu-overlay.show { display: flex; }
+.priority-menu-panel {
+  width: calc(100% - 40px); max-width: 360px;
+  background: var(--paper); border-radius: 16px;
+  padding: 20px 0 8px 0;
+  box-shadow: 0 -2px 20px rgba(0,0,0,0.12);
+  animation: slideUp 0.2s ease;
+}
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.priority-menu-title {
+  font-size: 13px; color: var(--text-dim); text-align: center;
+  padding: 0 20px 12px 20px; border-bottom: var(--bw) solid var(--line);
+  margin-bottom: 4px;
+}
+.priority-menu-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px; font-size: 16px; cursor: pointer;
+  transition: background 0.1s;
+}
+.priority-menu-item:active { background: var(--bg); }
+.priority-menu-item.active { background: var(--bg); font-weight: 600; }
+.priority-menu-item span:first-child { font-size: 20px; width: 28px; text-align: center; }
+.priority-menu-cancel {
+  text-align: center; padding: 14px; font-size: 15px; color: var(--text-dim);
+  border-top: var(--bw) solid var(--line); margin-top: 4px; cursor: pointer;
+}
+.priority-menu-cancel:active { color: var(--warn); }
 </style>
 </head>
 <body>
@@ -550,6 +584,17 @@ body {
   </div>
 </div>
 
+<div class="priority-menu-overlay" id="priorityMenuOverlay">
+  <div class="priority-menu-panel">
+    <div class="priority-menu-title">设置优先级</div>
+    <div class="priority-menu-item" data-pri="both"><span>🔥</span><span>重要且紧急</span></div>
+    <div class="priority-menu-item" data-pri="important"><span>⭐</span><span>重要不紧急</span></div>
+    <div class="priority-menu-item" data-pri="urgent"><span>⚡</span><span>紧急不重要</span></div>
+    <div class="priority-menu-item" data-pri="null"><span>○</span><span>无优先级</span></div>
+    <div class="priority-menu-cancel" id="priorityMenuCancel">取消</div>
+  </div>
+</div>
+
 <div class="sync-overlay" id="syncOverlay">
   <div class="sync-panel">
     <h3>☁️ 跨设备同步</h3>
@@ -568,6 +613,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

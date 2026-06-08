@@ -1041,10 +1041,80 @@ function renderProjectDetail(projectId) {
   });
 }
 
+// Priority menu
+let _priorityMenuTodoId = null;
+
+function showPriorityMenu(todoId) {
+  _priorityMenuTodoId = todoId;
+  const todos = loadTodos();
+  const todo = todos.find(t => t.id === todoId);
+  if (!todo) return;
+  // Highlight current priority
+  document.querySelectorAll('.priority-menu-item').forEach(item => {
+    item.classList.toggle('active',
+      (item.dataset.pri === 'null' && !todo.priority) || item.dataset.pri === todo.priority);
+  });
+  document.getElementById('priorityMenuOverlay').classList.add('show');
+  try { navigator.vibrate(10); } catch {}
+}
+
+function hidePriorityMenu() {
+  document.getElementById('priorityMenuOverlay').classList.remove('show');
+  _priorityMenuTodoId = null;
+}
+
+function setPriorityFromMenu(pri) {
+  if (!_priorityMenuTodoId) return;
+  const todos = loadTodos();
+  const todo = todos.find(t => t.id === _priorityMenuTodoId);
+  if (!todo) return;
+  todo.priority = pri === 'null' ? null : pri;
+  todo.updatedAt = nowISO();
+  saveTodos(todos);
+  if (aiOrder) { aiOrder = null; localStorage.removeItem(AI_ORDER_KEY); }
+  hidePriorityMenu();
+  render();
+}
+
 function bindListEvents() {
   document.querySelectorAll('.todo-item').forEach(el => {
     if (el._bound) return; el._bound = true;
+
+    let pressTimer = null;
+    let didLongPress = false;
+    let startX = 0, startY = 0;
+
+    function clearPress() {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+    }
+
+    el.addEventListener('touchstart', (e) => {
+      didLongPress = false;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      pressTimer = setTimeout(() => {
+        // Check didn't move too much
+        didLongPress = true;
+        showPriorityMenu(el.dataset.id);
+      }, 500);
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+      const dx = Math.abs(e.touches[0].clientX - startX);
+      const dy = Math.abs(e.touches[0].clientY - startY);
+      if (dx > 10 || dy > 10) clearPress(); // Cancel if scrolled
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+      clearPress();
+      if (didLongPress) {
+        e.preventDefault();
+        return; // Prevent click after long press
+      }
+    });
+
     el.addEventListener('click', (e) => {
+      if (didLongPress) return;
       if (e.target.closest('[data-action="delete"]')) {
         e.stopPropagation();
         deleteTodo(el.dataset.id);
@@ -1735,6 +1805,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Apply saved theme on load
   setTheme(getTheme());
+
+  // === Priority menu handlers ===
+  document.getElementById('priorityMenuOverlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) hidePriorityMenu();
+  });
+  document.getElementById('priorityMenuCancel').addEventListener('click', hidePriorityMenu);
+  document.querySelectorAll('.priority-menu-item').forEach(item => {
+    item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
+  });
 
   // === Swipe navigation ===
   (function setupSwipe() {
