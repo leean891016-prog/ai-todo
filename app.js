@@ -673,6 +673,7 @@ function startEdit(todoId) {
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { finish(false); }
   });
   input.addEventListener('blur', () => setTimeout(() => finish(true), 150));
 }
@@ -782,6 +783,7 @@ function renderInspiration() {
   document.getElementById('inspForm').addEventListener('submit', (e) => {
     e.preventDefault(); const inp = document.getElementById('inspInput');
     addTodo(inp.value, 'inspiration'); inp.value = ''; inp.focus();
+  });
 }
 
 function priorityBtn(todo) {
@@ -899,6 +901,7 @@ function renderDaily() {
     addTodo(inp.value, 'daily'); inp.value = ''; inp.focus();
   });
 
+
   // Voice input
   setupVoiceInput();
 
@@ -949,6 +952,7 @@ function renderProjects() {
   });
 
   // Tap project → detail
+  document.querySelectorAll('.project-item').forEach(el => {
     el.addEventListener('click', (e) => {
       if (e.target.closest('[data-action="del-proj"]')) return;
       renderProjectDetail(el.dataset.projId);
@@ -1007,6 +1011,7 @@ function renderProjectDetail(projectId) {
   });
 }
 
+// Priority menu
 let _priorityMenuTodoId = null;
 function showPriorityMenu(todoId) {
   _priorityMenuTodoId = todoId;
@@ -1209,7 +1214,7 @@ function render() {
 // ========== Push Notifications ==========
 
 // Will be set once Cloudflare Worker is deployed
-const PUSH_WORKER_URL = 'https://ai-todo-push.leean891016.workers.dev';
+let PUSH_WORKER_URL = null;
 
 const VAPID_PUBLIC_KEY = 'BO8R1QOlLq7U_Ro6dnUm_2XnEESRSsQ84pff0HCkNEjvuEHAMR-6Hvm81NtPAjksRtfeHUaLLUGQsLSuNW5Fasg';
 
@@ -1244,7 +1249,7 @@ async function subscribeToPush() {
 }
 
 async function syncRemindersToBackend() {
-  
+  if (!PUSH_WORKER_URL) return;
   try {
     const sub = await subscribeToPush();
     if (!sub) return;
