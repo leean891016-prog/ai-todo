@@ -1,5 +1,5 @@
 // Minimal Service Worker — push only, no caching
-const VERSION = 'v55';
+const VERSION = 'v56';
 
 self.addEventListener('push', (e) => {
   const data = e.data ? e.data.json() : {};

@@ -54,6 +54,7 @@ const DB_VERSION = 1;
 const STORAGE_KEY = 'ai-todo-items';    // legacy localStorage keys for fallback
 const PROJECTS_KEY = 'ai-todo-projects';
 const COLLAPSED_KEY = 'ai-todo-completed-collapsed';
+const EXPIRED_KEY = 'ai-todo-expired-collapsed';
 const NOTIFIED_KEY = 'ai-todo-notified';
 const REVIEW_KEY = 'ai-todo-review-done';
 
@@ -776,12 +777,7 @@ const PRI_WEIGHT = { both: 0, urgent: 1, important: 2, null: 3 };
 function prioritySort(a, b) {
   const today = getToday();
 
-  // 1. Priority
-  const aPri = PRI_WEIGHT[a.priority] ?? 3;
-  const bPri = PRI_WEIGHT[b.priority] ?? 3;
-  if (aPri !== bPri) return aPri - bPri;
-
-  // 2. Same priority: today's timed items first, sorted by time
+  // Sort by time: today's timed items first, sorted by time
   const aTime = a.reminderTime && a.reminderDate === today;
   const bTime = b.reminderTime && b.reminderDate === today;
   if (aTime && bTime) {
@@ -791,7 +787,7 @@ function prioritySort(a, b) {
   if (aTime && !bTime) return -1;
   if (!aTime && bTime) return 1;
 
-  // 3. Same priority, same time status → alphabetically
+  // Same time status → alphabetically
   return a.text.localeCompare(b.text);
 }
 
@@ -808,16 +804,17 @@ function renderDaily() {
   const todayItems = allActive.filter(t => !t.reminderDate || t.reminderDate <= today);
   const futureItems = allActive.filter(t => t.reminderDate && t.reminderDate > today);
 
-  // Sort today's items by priority, then time
-  const sorted = [...todayItems].sort(prioritySort);
+  // Split expired from today's items
+  const expiredItems = todayItems.filter(t => isExpired(t));
+  const normalTodayItems = todayItems.filter(t => !isExpired(t));
 
-  // Sort future items by date, then priority, then time
+  // Sort normal today's items by time
+  const sorted = [...normalTodayItems].sort(prioritySort);
+
+  // Sort future items by date, then time
   const sortedFuture = [...futureItems].sort((a, b) => {
     const d = (a.reminderDate || '9').localeCompare(b.reminderDate || '9');
     if (d !== 0) return d;
-    const aPri = PRI_WEIGHT[a.priority] ?? 3;
-    const bPri = PRI_WEIGHT[b.priority] ?? 3;
-    if (aPri !== bPri) return aPri - bPri;
     return (a.reminderTime || '99:99').localeCompare(b.reminderTime || '99:99');
   });
 
@@ -826,15 +823,15 @@ function renderDaily() {
     '<button type="button" class="mic-btn" id="micBtn" title="语音输入">🎤</button>' +
     '<button type="submit">+</button></form>';
 
-  html += '<div class="section-title">今天 (' + todayItems.length + ')</div><ul class="todo-list" id="activeList">';
+  html += '<div class="section-title">今天 (' + normalTodayItems.length + ')</div><ul class="todo-list" id="activeList">';
   if (sorted.length === 0) html += '<li class="empty">今天没有待办 🎉</li>';
   else sorted.forEach(t => {
-    html += '<li class="todo-item' + (isExpired(t) ? ' expired' : '') + '" data-id="' + t.id + '">' +
+    html += '<li class="todo-item" data-id="' + t.id + '">' +
       '<span class="circle"></span>' +
       (t.postponeCount >= 3 ? '<span style="font-size:16px;flex-shrink:0;" title="拖了' + t.postponeCount + '天">😴</span>' : '') +
-      '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
+      '<span class="text">' + escapeHtml(t.text) + '</span>' +
       (t.reminderTime ? '<span class="time-badge">' + t.reminderTime + '</span>' : '') +
-      
+
       priorityBtn(t) +
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
@@ -851,6 +848,19 @@ function renderDaily() {
         '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
         priorityBtn(t) +
         
+        '<button class="delete-btn" data-action="delete">×</button></li>';
+    });
+    html += '</ul>';
+  }
+
+  // Expired items
+  if (expiredItems.length > 0) {
+    html += '<div class="section-title section-toggle" id="expiredLabel" style="color:var(--warn)"><span>已过期 (' + expiredItems.length + ')</span><span class="chevron" id="expiredChevron">▾</span></div>';
+    html += '<ul class="todo-list" id="expiredList">';
+    expiredItems.forEach(t => {
+      html += '<li class="todo-item expired" data-id="' + t.id + '"><span class="circle"></span>' +
+        '<span class="text"><span style="font-size:12px;color:var(--warn);font-weight:600">原定' + (t.reminderDate && t.reminderDate !== today ? t.reminderDate + ' ' : '') + t.reminderTime + ' </span>' + escapeHtml(t.text) + '</span>' +
+        priorityBtn(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     html += '</ul>';
@@ -881,6 +891,19 @@ function renderDaily() {
 
   // Voice input
   setupVoiceInput();
+
+  // Expired collapse
+  const expLabel = document.getElementById('expiredLabel');
+  if (expLabel) {
+    const expList = document.getElementById('expiredList');
+    const expCollapsed = localStorage.getItem(EXPIRED_KEY) === '1';
+    if (expCollapsed) { expLabel.classList.add('collapsed'); expList.style.display = 'none'; }
+    expLabel.addEventListener('click', () => {
+      const isCollapsed = expLabel.classList.toggle('collapsed');
+      expList.style.display = isCollapsed ? 'none' : '';
+      localStorage.setItem(EXPIRED_KEY, isCollapsed ? '1' : '0');
+    });
+  }
 
   // Completed collapse
   const label = document.getElementById('completedLabel');
@@ -1263,11 +1286,14 @@ async function syncRemindersToBackend(silent) {
     const reminders = todos
       .filter(t => !t.completed && t.reminderTime && t.reminderDate)
       .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
-    await fetch(PUSH_WORKER_URL + '/api/sync', {
+    const resp = await fetch(PUSH_WORKER_URL + '/api/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
     });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const result = await resp.json();
+    if (!result.ok) throw new Error(result.error || '后端错误');
     if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
   } catch (e) {
     console.warn('Sync reminders failed:', e.message);
@@ -1301,9 +1327,13 @@ async function requestPushPermission() {
     showBanner('推送订阅失败，请检查网络后重试', true);
     return;
   }
-  await syncRemindersToBackend(true);
-  updatePushStatus('✅ 推送已就绪', '#7A9A7E');
-  showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
+  try {
+    await syncRemindersToBackend(true);
+    updatePushStatus('✅ 推送已就绪', '#7A9A7E');
+    showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
+  } catch (e) {
+    updatePushStatus('❌ 同步失败', '#e74c3c');
+  }
 }
 
 function setupPushNotifications() {
