@@ -1,5 +1,5 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v17';
+const VERSION = 'v18';
 const CACHE = 'ai-todo-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192-v2.png', 'icon-512-v2.png'];
 
@@ -11,19 +11,20 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
+    await self.clients.claim();
+    // Notify all open pages to reload
+    const allClients = await self.clients.matchAll();
+    allClients.forEach(client => client.postMessage({ type: 'NEW_VERSION' }));
+  })());
 });
 
 // Network-first for HTML, cache-first for static assets
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // HTML: always try network first
   if (e.request.destination === 'document' || url.pathname.endsWith('/') || url.pathname.endsWith('.html')) {
     e.respondWith(
       fetch(e.request)
@@ -35,14 +36,12 @@ self.addEventListener('fetch', (e) => {
         .catch(() => caches.match(e.request))
     );
   } else {
-    // Static assets: cache-first
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request))
     );
   }
 });
 
-// Notify clients when a new version is ready
 self.addEventListener('message', (e) => {
   if (e.data === 'skipWaiting') {
     self.skipWaiting();

@@ -1562,17 +1562,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js?v=' + Date.now()).then(reg => {
+      // Auto-reload when SW sends NEW_VERSION message
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'NEW_VERSION') {
+          window.location.reload();
+        }
+      });
+      // On update found, auto skipWaiting and reload
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showBanner('有新版本，点击更新', true);
-            document.getElementById('banner').onclick = () => { newWorker.postMessage('skipWaiting'); window.location.reload(); };
+            newWorker.postMessage('skipWaiting');
           }
         });
       });
     });
-    setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 600000);
+    // Check for updates every 5 minutes
+    setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
   }
 
   // === Menu Toggle ===
