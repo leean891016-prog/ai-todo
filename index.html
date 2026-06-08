@@ -64,48 +64,6 @@ body {
 
 .app { width: 100%; min-height: 100dvh; padding: 24px 20px 20px; }
 
-/* Page turn */
-.view-perspective { perspective: 1200px; position: relative; }
-.view-page-back {
-  position: absolute; inset: 0;
-  backface-visibility: hidden;
-}
-	.curl-shadow {
-	  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-	  pointer-events: none; z-index: 2; opacity: 0;
-	}
-	.curl-shadow.active { opacity: 1; }
-.view-page {
-  position: relative;
-  transform-origin: left center;
-  backface-visibility: hidden;
-  transition: transform 0.6s cubic-bezier(0.2, 0.0, 0.0, 1), opacity 0.5s ease;
-}
-.view-page.dragging {
-  transition: none !important;
-}
-.view-page.spring-back {
-  transition: transform 0.35s cubic-bezier(0.25, 0.0, 0.0, 1), opacity 0.3s ease;
-}
-.view-page.turning-out {
-  transform-origin: left center;
-  animation: pageOut 0.6s cubic-bezier(0.2, 0.0, 0.0, 1) forwards;
-}
-.view-page.turning-out-back {
-  transform-origin: right center;
-  animation: pageOutBack 0.6s cubic-bezier(0.2, 0.0, 0.0, 1) forwards;
-}
-@keyframes pageOut {
-	  0%   { transform: rotateY(0deg) scaleX(1); opacity: 1; }
-	  50%  { opacity: 0.6; }
-	  100% { transform: rotateY(-85deg) scaleX(0.82); opacity: 0.2; }
-	}
-@keyframes pageOutBack {
-	  0%   { transform: rotateY(0deg) scaleX(1); opacity: 1; }
-	  50%  { opacity: 0.6; }
-	  100% { transform: rotateY(85deg) scaleX(0.82); opacity: 0.2; }
-	}
-
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; padding-bottom: 16px; border-bottom: var(--bw) solid var(--line); }
 .header-left { display: flex; flex-direction: column; }
 .header-left h1 { font-size: 28px; font-weight: 400; letter-spacing: 3px; color: var(--text); }
@@ -461,18 +419,18 @@ body.no-scroll { overflow: hidden; }
 <body>
 <div class="banner" id="banner"><span class="banner-text" id="bannerText"></span></div>
 
-<div style="position:fixed;top:8px;right:12px;z-index:9999;background:#e74c3c;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif;letter-spacing:0.5px">v41</div>
+<div style="position:fixed;top:8px;right:12px;z-index:9999;background:#e74c3c;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;font-family:-apple-system,sans-serif;letter-spacing:0.5px">v42</div>
 <div class="app">
   <div class="header" id="headerArea">
     <div class="header-left">
-      <h1 id="headerTitle">日常<span style="color:#e74c3c;font-size:12px;margin-left:8px;font-weight:700">v41</span></h1>
+      <h1 id="headerTitle">日常<span style="color:#e74c3c;font-size:12px;margin-left:8px;font-weight:700">v42</span></h1>
       <span class="date" id="dateDisplay"></span>
     </div>
     <button class="back-btn" id="backBtn" style="display:none">← 返回</button>
     <button class="menu-btn" id="menuBtn">···</button>
   </div>
 
-  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="view-page" id="viewContent"></div><div class="curl-shadow" id="curlShadow"></div></div>
+  <div id="viewContent"></div>
 
 </div>
 
@@ -523,6 +481,6 @@ body.no-scroll { overflow: hidden; }
 </div>
 
 
-<script src="app.js?v=42"></script>
+<script src="app.js?v=43"></script>
 </body>
 </html>

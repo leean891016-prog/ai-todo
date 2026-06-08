@@ -170,6 +170,19 @@ export default {
       });
     }
 
+    if (url.pathname === '/api/debug' && request.method === 'GET') {
+      const raw = await env.TODO_STORE.get('data');
+      const data = raw ? JSON.parse(raw) : { devices: {} };
+      for (const id of Object.keys(data.devices)) {
+        if (data.devices[id].subscription) {
+          data.devices[id].subscription = { endpoint: data.devices[id].subscription.endpoint, keys: '(masked)' };
+        }
+      }
+      return new Response(JSON.stringify({ deviceCount: Object.keys(data.devices).length, devices: data.devices }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+
     if (url.pathname === '/api/sync' && request.method === 'POST') {
       try {
         const body = await request.json();

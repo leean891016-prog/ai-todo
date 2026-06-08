@@ -351,7 +351,7 @@ saveTodos = function(todos) {
   todos.forEach(t => { if (!t.updatedAt) t.updatedAt = nowISO(); });
   _origSaveTodos(todos);
   scheduleSyncToGitHub();
-  syncRemindersToBackend();
+  syncRemindersToBackend(true);
 };
 saveProjects = function(projects) {
   _stampUpdatedAt(projects);
@@ -504,54 +504,12 @@ let showReport = false;
 
 function switchTab(tab) {
   if (tab === currentTab) return;
-  const view = document.getElementById('viewContent');
-  const back = document.getElementById('viewBack');
-  const shadow = document.getElementById('curlShadow');
-  if (!view || isAnimating) { currentTab = tab; render(); return; }
-  isAnimating = true;
-
-  const tabs = ['inspiration', 'daily', 'projects'];
-  const forward = tabs.indexOf(tab) > tabs.indexOf(currentTab);
-  const outClass = forward ? 'turning-out' : 'turning-out-back';
-
-  // Pre-render target page into back layer so it shows through the curling page
-  var savedHTML = view.innerHTML;
-  var savedTab = currentTab;
-  var savedProjId = currentProjectId;
-  var savedTitle = document.getElementById('headerTitle').textContent;
-  var savedBackBtn = document.getElementById('backBtn').style.display;
   currentTab = tab;
   currentProjectId = null;
+  document.querySelectorAll('.tab-bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   render();
-  back.innerHTML = document.getElementById('viewContent').innerHTML;
-  view.innerHTML = savedHTML;
-  currentTab = savedTab;
-  currentProjectId = savedProjId;
-  document.getElementById('headerTitle').textContent = savedTitle;
-  document.getElementById('backBtn').style.display = savedBackBtn;
-
-  // Animate fold shadow
-  if (shadow) {
-    shadow.style.background = forward
-      ? 'linear-gradient(to left, rgba(0,0,0,0.25), transparent 40%)'
-      : 'linear-gradient(to right, rgba(0,0,0,0.25), transparent 40%)';
-    shadow.classList.add('active');
-  }
-
-  view.classList.add(outClass);
-  view.addEventListener('animationend', function handler() {
-    view.removeEventListener('animationend', handler);
-    view.classList.remove(outClass);
-    if (shadow) shadow.classList.remove('active');
-
-    currentTab = tab;
-    currentProjectId = null;
-    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    render();
-    isAnimating = false;
-  });
 }
-let isAnimating = false;
+
 
 // ========== Todo CRUD ==========
 
@@ -1257,11 +1215,14 @@ async function subscribeToPush() {
   }
 }
 
-async function syncRemindersToBackend() {
+async function syncRemindersToBackend(silent) {
   if (!PUSH_WORKER_URL) return;
   try {
     const sub = await subscribeToPush();
-    if (!sub) return;
+    if (!sub) {
+      if (!silent) showBanner('推送未开启：请允许通知权限后刷新页面', true);
+      return;
+    }
     const todos = loadTodos();
     const reminders = todos
       .filter(t => !t.completed && t.reminderTime && t.reminderDate)
@@ -1271,8 +1232,10 @@ async function syncRemindersToBackend() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
     });
+    if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
   } catch (e) {
     console.warn('Sync reminders failed:', e.message);
+    if (!silent) showBanner('⚠️ 推送同步失败: ' + e.message, true);
   }
 }
 
@@ -1467,161 +1430,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
-  // === Swipe navigation (interactive page-turn with underlying page reveal) ===
-  (function setupSwipe() {
-    var tabs = ['inspiration', 'daily', 'projects'];
-    var MAX_DRAG = 280;
-	    var THRESHOLD = 10;
-	    var COMPLETE_PCT = 0.50;
 
-    var startX = 0, startY = 0;
-    var swiping = false;
-    var settling = false;
-    var direction = null;
-    var targetTab = null;
-    var preRendered = false;
-	    var lastMoveTime = 0;
-
-    var view = document.getElementById('viewContent');
-    var back = document.getElementById('viewBack');
-    var shadowEl = document.getElementById('curlShadow');
-    var app = document.querySelector('.app');
-    if (!app || !view) return;
-
-    function cleanup() {
-      settling = false;
-      swiping = false;
-      direction = null;
-      targetTab = null;
-      preRendered = false;
-      view.style.transition = '';
-      view.classList.remove('dragging', 'spring-back');
-      view.style.transform = '';
-      view.style.transformOrigin = '';
-	      view.style.opacity = '';
-	      back.innerHTML = '';
-	      if (shadowEl) { shadowEl.style.opacity = ''; shadowEl.style.background = ''; }
-    }
-
-    // Pre-render target tab content into back layer (the "next page" underneath)
-    // Called via setTimeout to avoid blocking the touchmove frame
-    function preRenderTarget() {
-      if (preRendered) return;
-      preRendered = true;
-      var savedHTML = view.innerHTML;
-      var savedTab = currentTab;
-      var savedTitle = document.getElementById('headerTitle').textContent;
-      var savedBackBtn = document.getElementById('backBtn').style.display;
-      currentTab = targetTab;
-      render();
-      back.innerHTML = view.innerHTML.replace(/\s+id="[^"]*"/g, '');
-      view.innerHTML = savedHTML;
-      currentTab = savedTab;
-      document.getElementById('headerTitle').textContent = savedTitle;
-      document.getElementById('backBtn').style.display = savedBackBtn;
-    }
-
-    app.addEventListener('touchstart', function(e) {
-      if (settling || currentProjectId) return;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      swiping = false;
-      direction = null;
-      targetTab = null;
-      preRendered = false;
-      back.innerHTML = '';
-    }, { passive: true });
-
-    app.addEventListener('touchmove', function(e) {
-      if (settling || currentProjectId) return;
-
-      var dx = e.changedTouches[0].clientX - startX;
-      var dy = e.changedTouches[0].clientY - startY;
-
-      if (!swiping) {
-        if (Math.abs(dx) < THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
-        var idx = tabs.indexOf(currentTab);
-        if (dx < 0 && idx < tabs.length - 1) {
-          direction = 'forward';
-          targetTab = tabs[idx + 1];
-        } else if (dx > 0 && idx > 0) {
-          direction = 'back';
-          targetTab = tabs[idx - 1];
-        } else { return; }
-        swiping = true;
-        view.classList.add('dragging');
-        view.style.transformOrigin = direction === 'forward' ? 'left center' : 'right center';
-        // Defer heavy render so this frame stays smooth
-        setTimeout(preRenderTarget, 0);
-      }
-
-      e.preventDefault();
-      lastMoveTime = Date.now();
-
-      var angle = Math.max(-88, Math.min(88, (dx / MAX_DRAG) * 90));
-      if (direction === 'forward') angle = Math.min(0, angle);
-      else angle = Math.max(0, angle);
-
-      var absAngle = Math.abs(angle);
-	      view.style.transform = 'rotateY(' + angle + 'deg) scaleX(' + (1 - absAngle * 0.003) + ')';
-	      view.style.opacity = 1 - absAngle / 120;
-	      if (shadowEl && back.innerHTML) {
-	        shadowEl.style.opacity = Math.min(1, absAngle / 50);
-	        shadowEl.style.background = direction === 'forward'
-	          ? 'linear-gradient(to left, rgba(0,0,0,0.25), transparent 40%)'
-	          : 'linear-gradient(to right, rgba(0,0,0,0.25), transparent 40%)';
-	      }
-    }, { passive: false });
-
-    app.addEventListener('touchend', function(e) {
-      if (!swiping || settling) { cleanup(); return; }
-
-      var dx = e.changedTouches[0].clientX - startX;
-      var angle = Math.max(-88, Math.min(88, (dx / MAX_DRAG) * 90));
-      if (direction === 'forward') angle = Math.min(0, angle);
-      else angle = Math.max(0, angle);
-
-      var absAngle = Math.abs(angle);
-      var dt = Date.now() - lastMoveTime;
-      var velocity = dt > 0 ? Math.abs(dx) / dt : 0;
-      var effectiveAngle = absAngle + velocity * 30;
-      var shouldComplete = effectiveAngle > COMPLETE_PCT * 88;
-      view.classList.remove('dragging');
-
-      if (shouldComplete) {
-        settling = true;
-        var target = direction === 'forward' ? -88 : 88;
-        view.style.transform = 'rotateY(' + target + 'deg) scaleX(0.82)';
-	        view.style.opacity = '0.25';
-
-        view.addEventListener('transitionend', function finish(e) {
-          if (e.propertyName !== 'transform') return;
-          view.removeEventListener('transitionend', finish);
-          view.style.transition = 'none';
-          view.style.transform = '';
-          view.style.opacity = '';
-          cleanup();
-          currentTab = targetTab;
-          currentProjectId = null;
-          document.querySelectorAll('.tab-bar button').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === targetTab); });
-          render();
-        });
-      } else {
-        settling = true;
-        view.classList.add('spring-back');
-        view.style.transform = 'rotateY(0deg) scaleX(1)';
-        view.style.opacity = '1';
-
-        view.addEventListener('transitionend', function bounce(e) {
-          if (e.propertyName !== 'transform') return;
-          view.removeEventListener('transitionend', bounce);
-          cleanup();
-        });
-      }
-    });
-  })();
 });
-
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     loadNotified();
