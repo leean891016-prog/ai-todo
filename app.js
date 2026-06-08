@@ -1268,7 +1268,7 @@ async function subscribeToPush() {
 
     // [v57] 3. 全新注册 SW
     updatePushStatus('⏳ 注册新SW...', '#C4A86B');
-    const reg = await navigator.serviceWorker.register('sw.js?v=58');
+    const reg = await navigator.serviceWorker.register('sw.js?v=59');
 
     // [v57] 4. 用 statechange 事件等待激活（比轮询更可靠）
     if (!reg.active) {
@@ -1328,13 +1328,23 @@ async function subscribeToPush() {
       }
     }
 
+    // [v58 fix] Re-fetch registration — iOS may have stale ref after activation
+    reg = await navigator.serviceWorker.getRegistration();
+    if (!reg || !reg.active) {
+      throw new Error('SW激活后注册丢失');
+    }
+
     updatePushStatus('⏳ 订阅中...', '#C4A86B');
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+      // iOS pushManager.subscribe can hang — wrap with 10s timeout
+      sub = await Promise.race([
+        reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+        }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('订阅超时(10s)')), 10000))
+      ]);
     }
     return sub;
   } catch (e) {
