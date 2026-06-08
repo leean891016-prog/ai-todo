@@ -320,17 +320,46 @@ body {
 }
 .link-item:active { color: var(--accent); }
 
-.priority-icon-wrap {
+/* Priority bar: dual-segment vertical bar */
+.priority-bar-wrap {
   flex-shrink: 0; display: flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; margin: -8px -4px -8px 0;
+  width: 30px; height: 36px; margin: -6px -2px -6px 4px;
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.priority-icon {
-  font-size: 13px; transition: all 0.2s; pointer-events: none;
-  opacity: 0.25; filter: grayscale(0.3);
+.priority-bar {
+  display: flex; flex-direction: column; gap: 2px;
+  width: 4px; height: 14px; pointer-events: none;
 }
-.priority-icon.priority-important { opacity: 0.75; filter: none; }
-.priority-icon.priority-urgent { opacity: 1; filter: none; }
+.priority-seg {
+  width: 4px; height: 6px; border-radius: 2px;
+  background: transparent;
+  border: 1px solid var(--line);
+  transition: all 0.2s;
+}
+.priority-seg.filled {
+  background: var(--text-dim);
+  border-color: var(--text-dim);
+}
+.priority-bar.all-empty .priority-seg { opacity: 0.3; }
+
+/* Priority filter pills */
+.filter-pills {
+  display: flex; gap: 8px; padding: 4px 0 12px 0;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.filter-pills::-webkit-scrollbar { display: none; }
+.filter-pill {
+  flex-shrink: 0; padding: 5px 12px; border-radius: 14px;
+  font-size: 12px; font-weight: var(--fw-body);
+  border: var(--bw) solid var(--line);
+  background: var(--bg); color: var(--text-dim);
+  cursor: pointer; transition: all 0.15s;
+  white-space: nowrap;
+}
+.filter-pill.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
 
 /* Completed report */
 .report-stats { margin-bottom: 28px; }
@@ -539,6 +568,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=16"></script>
+<script src="app.js?v=17"></script>
 </body>
 </html>

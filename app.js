@@ -548,9 +548,10 @@ function cyclePriority(id) {
   const todos = loadTodos();
   const todo = todos.find(t => t.id === id);
   if (!todo || todo.completed) return;
-  // Cycle: null → important → urgent → null
+  // Cycle: null → important → urgent → both → null
   if (!todo.priority) todo.priority = 'important';
   else if (todo.priority === 'important') todo.priority = 'urgent';
+  else if (todo.priority === 'urgent') todo.priority = 'both';
   else todo.priority = null;
   saveTodos(todos);
   // User override clears AI order
@@ -784,33 +785,47 @@ function renderInspiration() {
   });
 }
 
-function priorityIcon(todo) {
-  const icon = todo.priority === 'urgent' ? '⚡' : todo.priority === 'important' ? '⭐' : '○';
-  const cls = 'priority-icon' + (todo.priority ? ' priority-' + todo.priority : '');
-  return '<span class="priority-icon-wrap" data-action="cycle-priority" data-id="' + todo.id + '">' +
-    '<span class="' + cls + '">' + icon + '</span></span>';
+function priorityBar(todo) {
+  const imp = (todo.priority === 'important' || todo.priority === 'both');
+  const urg = (todo.priority === 'urgent' || todo.priority === 'both');
+  const allEmpty = !imp && !urg;
+  return '<span class="priority-bar-wrap" data-action="cycle-priority" data-id="' + todo.id + '">' +
+    '<span class="priority-bar' + (allEmpty ? ' all-empty' : '') + '">' +
+    '<span class="priority-seg' + (imp ? ' filled' : '') + '"></span>' +
+    '<span class="priority-seg' + (urg ? ' filled' : '') + '"></span>' +
+    '</span></span>';
 }
+
+// Priority weight: both > urgent > important > null
+const PRI_WEIGHT = { both: 0, urgent: 1, important: 2, null: 3 };
 
 function prioritySort(a, b) {
   const today = getToday();
-  const aHasTime = a.reminderTime && a.reminderDate === today;
-  const bHasTime = b.reminderTime && b.reminderDate === today;
 
-  // 1. Today's timed items sorted by time (earliest first)
-  if (aHasTime && bHasTime) {
+  // 1. Priority
+  const aPri = PRI_WEIGHT[a.priority] ?? 3;
+  const bPri = PRI_WEIGHT[b.priority] ?? 3;
+  if (aPri !== bPri) return aPri - bPri;
+
+  // 2. Same priority: today's timed items first, sorted by time
+  const aTime = a.reminderTime && a.reminderDate === today;
+  const bTime = b.reminderTime && b.reminderDate === today;
+  if (aTime && bTime) {
     const cmp = a.reminderTime.localeCompare(b.reminderTime);
     if (cmp !== 0) return cmp;
   }
-  if (aHasTime && !bHasTime) return -1;
-  if (!aHasTime && bHasTime) return 1;
+  if (aTime && !bTime) return -1;
+  if (!aTime && bTime) return 1;
 
-  // 2. Same time status → by priority (urgent > important > none)
-  const order = { urgent: 0, important: 1, null: 2 };
-  const priCmp = (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
-  if (priCmp !== 0) return priCmp;
-
-  // 3. Same priority, no time → sort by text (stable)
+  // 3. Same priority, same time status → alphabetically
   return a.text.localeCompare(b.text);
+}
+
+let priorityFilter = 'all'; // 'all' | 'both' | 'urgent' | 'important' | 'null'
+
+function setPriorityFilter(val) {
+  priorityFilter = val;
+  render();
 }
 
 function renderDaily() {
@@ -825,18 +840,26 @@ function renderDaily() {
   const todayItems = allActive.filter(t => !t.reminderDate || t.reminderDate <= today);
   const futureItems = allActive.filter(t => t.reminderDate && t.reminderDate > today);
 
-  // Sort today's items: expired first → timed (nearest) → priority
-  const sorted = applyAIOrder(todayItems).sort((a, b) => {
-    const expDiff = (isExpired(b) ? 1 : 0) - (isExpired(a) ? 1 : 0);
-    if (expDiff !== 0) return expDiff;
+  // Apply filter
+  const filterLabels = { both: '重要且紧急', urgent: '紧急', important: '重要', null: '无优先级' };
+  const filtered = priorityFilter === 'all' ? todayItems : todayItems.filter(t => {
+    if (priorityFilter === 'null') return !t.priority;
+    return t.priority === priorityFilter;
+  });
+
+  // Sort today's items by priority, then time (no expired-to-top)
+  const sorted = applyAIOrder(filtered).sort((a, b) => {
     if (aiOrder && aiOrder.order) return 0;
     return prioritySort(a, b);
   });
 
-  // Sort future items by date then time
+  // Sort future items by date, then priority, then time
   const sortedFuture = [...futureItems].sort((a, b) => {
     const d = (a.reminderDate || '9').localeCompare(b.reminderDate || '9');
     if (d !== 0) return d;
+    const aPri = PRI_WEIGHT[a.priority] ?? 3;
+    const bPri = PRI_WEIGHT[b.priority] ?? 3;
+    if (aPri !== bPri) return aPri - bPri;
     return (a.reminderTime || '99:99').localeCompare(b.reminderTime || '99:99');
   });
 
@@ -845,7 +868,15 @@ function renderDaily() {
     '<button type="button" class="mic-btn" id="micBtn" title="语音输入">🎤</button>' +
     '<button type="submit">+</button></form>';
 
-  html += '<div class="section-title">今天 (' + todayItems.length + ')</div><ul class="todo-list" id="activeList">';
+  // Priority filter pills
+  html += '<div class="filter-pills">';
+  ['all', 'both', 'urgent', 'important', 'null'].forEach(val => {
+    const labelMap = { all: '全部', both: '🔥 重要且紧急', urgent: '⚡ 紧急', important: '⭐ 重要', null: '○ 无' };
+    html += '<span class="filter-pill' + (priorityFilter === val ? ' active' : '') + '" data-filter="' + val + '">' + labelMap[val] + '</span>';
+  });
+  html += '</div>';
+
+  html += '<div class="section-title">' + (priorityFilter !== 'all' ? (filterLabels[priorityFilter] || '') + ' · ' : '') + '今天 (' + filtered.length + ')</div><ul class="todo-list" id="activeList">';
   if (sorted.length === 0) html += '<li class="empty">今天没有待办 🎉</li>';
   else sorted.forEach(t => {
     html += '<li class="todo-item' + (isExpired(t) ? ' expired' : '') + '" data-id="' + t.id + '">' +
@@ -853,7 +884,7 @@ function renderDaily() {
       (t.postponeCount >= 3 ? '<span style="font-size:16px;flex-shrink:0;" title="拖了' + t.postponeCount + '天">😴</span>' : '') +
       '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
       (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
-      priorityIcon(t) +
+      priorityBar(t) +
       '<button class="link-btn' + (t.linkGroup ? ' linked' : '') + '" data-action="link-todo" data-id="' + t.id + '">📎</button>' +
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
@@ -868,7 +899,7 @@ function renderDaily() {
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
         '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
-        priorityIcon(t) +
+        priorityBar(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     html += '</ul>';
@@ -895,6 +926,11 @@ function renderDaily() {
   document.getElementById('dailyForm').addEventListener('submit', (e) => {
     e.preventDefault(); const inp = document.getElementById('dailyInput');
     addTodo(inp.value, 'daily'); inp.value = ''; inp.focus();
+  });
+
+  // Filter pills
+  document.querySelectorAll('.filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => setPriorityFilter(pill.dataset.filter));
   });
 
   // Voice input
@@ -987,7 +1023,7 @@ function renderProjectDetail(projectId) {
       html += '<li class="todo-item" data-id="' + t.id + '">' +
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
-        priorityIcon(t) +
+        priorityBar(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     done.forEach(t => {
@@ -1207,7 +1243,7 @@ async function classifyTodo(text) {
 
   const systemPrompt =
     '你是一个待办分类助手。根据用户过去的分类习惯，判断新待办应该归类到哪个层级和优先级。\n' +
-    '只返回JSON，不要其他内容：{"layer":"daily"|"inspiration"|"project","priority":"normal"|"important"|"urgent","reason":"一句话理由"}\n' +
+    '只返回JSON，不要其他内容：{"layer":"daily"|"inspiration"|"project","priority":"normal"|"important"|"urgent"|"both","reason":"一句话理由"}\n' +
     '如果没把握，layer返回daily，priority返回normal。' + historyText;
 
   try {
@@ -1250,7 +1286,8 @@ function getAPIBase() {
 function showAISuggestion(todo, result) {
   if (!result || !result.layer) return;
   const layerLabel = result.layer === 'daily' ? '日常' : result.layer === 'inspiration' ? '灵感' : '项目';
-  const priLabel = result.priority === 'urgent' ? '重要且紧急' : result.priority === 'important' ? '重要' : '普通';
+  const priMap = { both: '重要且紧急', urgent: '紧急', important: '重要' };
+  const priLabel = priMap[result.priority] || '普通';
   const el = document.getElementById('aiSuggestion');
   el.style.display = '';
   el.textContent = '💡 AI 建议：归入「' + layerLabel + '」· ' + priLabel + (result.reason ? ' —— ' + result.reason : '');
@@ -1291,8 +1328,7 @@ async function fetchAIPrioritySort() {
 
   const systemPrompt =
     '你是待办优先级排序助手。根据待办的时间紧迫度和重要程度，给出今天的执行顺序建议。\n' +
-    '核心规则：截止时间越近的越靠前（今天10:00 > 今天16:00 > 明天）。时间排第一优先级。\n' +
-    '同等时间下：重要且紧急 > 已延期3次以上 > 重要 > 其他。没有截止时间的排在最后。\n' +
+    '优先级排序：both(重要且紧急) > urgent(紧急) > important(重要) > normal(无) | 同优先级按时间，已延期3次以上的适度提前\n' +
     '返回JSON，不要其他内容：{"order":["id1","id2",...],"reason":"一句话建议"}\n' +
     '只排序，不增删。';
 
