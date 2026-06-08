@@ -791,16 +791,6 @@ function priorityBtn(todo) {
   return '<button class=\"priority-btn\" data-action=\"pri-menu\" data-id=\"' + todo.id + '\">' + label + '</button>';
 }
 
-function priorityBar(todo) {
-  const imp = (todo.priority === 'important' || todo.priority === 'both');
-  const urg = (todo.priority === 'urgent' || todo.priority === 'both');
-  const allEmpty = !imp && !urg;
-  return '<span class="priority-bar-wrap" data-action="cycle-priority" data-id="' + todo.id + '">' +
-    '<span class="priority-bar' + (allEmpty ? ' all-empty' : '') + '">' +
-    '<span class="priority-seg' + (imp ? ' filled' : '') + '"></span>' +
-    '<span class="priority-seg' + (urg ? ' filled' : '') + '"></span>' +
-    '</span></span>';
-}
 
 // Priority weight: both > urgent > important > null
 const PRI_WEIGHT = { both: 0, urgent: 1, important: 2, null: 3 };
@@ -890,7 +880,7 @@ function renderDaily() {
       (t.postponeCount >= 3 ? '<span style="font-size:16px;flex-shrink:0;" title="拖了' + t.postponeCount + '天">😴</span>' : '') +
       '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
       (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
-      priorityBar(t) +
+      
       priorityBtn(t) +
       '<button class="link-btn' + (t.linkGroup ? ' linked' : '') + '" data-action="link-todo" data-id="' + t.id + '">📎</button>' +
       '<button class="delete-btn" data-action="delete">×</button></li>';
@@ -907,7 +897,7 @@ function renderDaily() {
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
         '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
         priorityBtn(t) +
-        priorityBar(t) +
+        
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     html += '</ul>';
@@ -1032,7 +1022,7 @@ function renderProjectDetail(projectId) {
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
         priorityBtn(t) +
-        priorityBar(t) +
+        
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     done.forEach(t => {
