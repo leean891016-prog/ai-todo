@@ -1,0 +1,10 @@
+name = "ai-todo-push"
+main = "push-worker.js"
+compatibility_date = "2024-12-01"
+
+kv_namespaces = [
+  { binding = "TODO_STORE", id = "PLACEHOLDER" }
+]
+
+[triggers]
+crons = ["* * * * *"]

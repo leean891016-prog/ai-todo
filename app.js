@@ -351,6 +351,7 @@ saveTodos = function(todos) {
   todos.forEach(t => { if (!t.updatedAt) t.updatedAt = nowISO(); });
   _origSaveTodos(todos);
   scheduleSyncToGitHub();
+  syncRemindersToBackend();
 };
 saveProjects = function(projects) {
   _stampUpdatedAt(projects);
@@ -732,9 +733,9 @@ function renderTodoItem(todo, showDelete) {
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
       const after = new Date(); after.setDate(after.getDate() + 2);
       const label = todo.reminderDate === fmtDate(tomorrow) ? '明天' : todo.reminderDate === fmtDate(after) ? '后天' : todo.reminderDate;
-      badgeHtml = '<span class="time-badge">🔔 ' + label + ' ' + todo.reminderTime + '</span>';
+      badgeHtml = '<span class="time-badge">' + label + ' ' + todo.reminderTime + '</span>';
     } else {
-      badgeHtml = '<span class="time-badge">🔔 ' + todo.reminderTime + '</span>';
+      badgeHtml = '<span class="time-badge">' + todo.reminderTime + '</span>';
     }
   }
 
@@ -855,7 +856,7 @@ function renderDaily() {
       '<span class="circle"></span>' +
       (t.postponeCount >= 3 ? '<span style="font-size:16px;flex-shrink:0;" title="拖了' + t.postponeCount + '天">😴</span>' : '') +
       '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
-      (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
+      (t.reminderTime ? '<span class="time-badge">' + t.reminderTime + '</span>' : '') +
       
       priorityBtn(t) +
       '<button class="delete-btn" data-action="delete">×</button></li>';
@@ -1210,6 +1211,62 @@ function render() {
   else renderDaily();
 }
 
+// ========== Push Notifications ==========
+
+// Will be set once Cloudflare Worker is deployed
+let PUSH_WORKER_URL = null;
+
+const VAPID_PUBLIC_KEY = 'BO8R1QOlLq7U_Ro6dnUm_2XnEESRSsQ84pff0HCkNEjvuEHAMR-6Hvm81NtPAjksRtfeHUaLLUGQsLSuNW5Fasg';
+
+function urlB64ToUint8Array(b64) {
+  const padding = '='.repeat((4 - b64.length % 4) % 4);
+  const raw = atob(b64.replace(/-/g, '+').replace(/_/g, '/') + padding);
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+function getDeviceId() {
+  let id = localStorage.getItem('ai-todo-device-id');
+  if (!id) { id = genId(); localStorage.setItem('ai-todo-device-id', id); }
+  return id;
+}
+
+async function subscribeToPush() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+      });
+    }
+    return sub;
+  } catch (e) {
+    console.warn('Push subscribe failed:', e.message);
+    return null;
+  }
+}
+
+async function syncRemindersToBackend() {
+  if (!PUSH_WORKER_URL) return;
+  try {
+    const sub = await subscribeToPush();
+    if (!sub) return;
+    const todos = loadTodos();
+    const reminders = todos
+      .filter(t => !t.completed && t.reminderTime && t.reminderDate)
+      .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
+    await fetch(PUSH_WORKER_URL + '/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
+    });
+  } catch (e) {
+    console.warn('Sync reminders failed:', e.message);
+  }
+}
+
 // ========== Init ==========
 
 // One-time setup via URL parameter: ?setup=TOKEN
@@ -1228,6 +1285,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   render();
   // Pull from GitHub after render (non-blocking)
   syncFromGitHub();
+  // Sync reminders for push notifications
+  syncRemindersToBackend();
 
   // Tap/click banner to dismiss
   document.getElementById('banner').addEventListener('click', () => {

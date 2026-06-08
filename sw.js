@@ -1,5 +1,5 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v37';
+const VERSION = 'v38';
 const CACHE = 'ai-todo-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192-v2.png', 'icon-512-v2.png'];
 
@@ -47,4 +47,33 @@ self.addEventListener('message', (e) => {
     self.skipWaiting();
     self.clients.claim();
   }
+});
+
+// Web Push: show notification when push received
+self.addEventListener('push', (e) => {
+  const data = e.data ? e.data.json() : {};
+  const title = data.title || '⏰ 待办提醒';
+  const options = {
+    body: data.body || '',
+    icon: 'icon-192-v2.png',
+    badge: 'icon-192-v2.png',
+    tag: data.tag || 'ai-todo',
+    requireInteraction: data.requireInteraction || false,
+    vibrate: [200, 100, 200],
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Handle notification click → open app
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window' }).then(clients => {
+      if (clients.length > 0) {
+        clients[0].focus();
+      } else {
+        clients.openWindow('./');
+      }
+    })
+  );
 });
