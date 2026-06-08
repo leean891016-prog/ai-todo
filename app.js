@@ -385,7 +385,7 @@ function showBanner(text, persistent) {
   bannerText.textContent = '🔔 ' + text;
   banner.classList.add('show');
   if (banner._timer) clearTimeout(banner._timer);
-  if (!persistent) banner._timer = setTimeout(() => banner.classList.remove('show'), 5000);
+  if (!persistent) banner._timer = setTimeout(() => banner.classList.remove('show'), 2000);
 }
 
 function isExpired(todo) {
@@ -1202,6 +1202,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   render();
   // Pull from GitHub after render (non-blocking)
   syncFromGitHub();
+
+  // Tap/click banner to dismiss
+  document.getElementById('banner').addEventListener('click', () => {
+    document.getElementById('banner').classList.remove('show');
+  });
 
   // Tab switching
   document.querySelectorAll('.tab-bar button').forEach(btn => {
