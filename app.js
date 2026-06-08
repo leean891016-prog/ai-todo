@@ -1233,7 +1233,6 @@ async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
   if (typeof window.Notification === 'undefined') return null;
 
-  // Request notification permission if not yet granted
   if (window.Notification.permission === 'default') {
     const result = await window.Notification.requestPermission();
     if (result !== 'granted') return null;
@@ -1242,24 +1241,85 @@ async function subscribeToPush() {
   }
 
   try {
-    // Ensure Service Worker is active
-    let reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) {
-      reg = await navigator.serviceWorker.register('sw.js');
-    }
-    // Wait for SW activation with timeout
-    if (!reg.active) {
-      await new Promise((resolve, reject) => {
-        const start = Date.now();
-        const check = () => {
-          if (reg.active) return resolve();
-          if (Date.now() - start > 15000) return reject(new Error('SW激活超时'));
-          setTimeout(check, 300);
-        };
-        check();
-      });
+    // [v57] 1. 强制清理所有旧 SW 注册
+    updatePushStatus('⏳ 清理旧注册...', '#C4A86B');
+    const oldRegs = await navigator.serviceWorker.getRegistrations();
+    if (oldRegs.length > 0) {
+      await Promise.all(oldRegs.map(r => r.unregister()));
+      // 等浏览器处理完注销
+      await new Promise(r => setTimeout(r, 800));
     }
 
+    // [v57] 2. 二次确认无残留
+    const remaining = await navigator.serviceWorker.getRegistrations();
+    if (remaining.length > 0) {
+      await Promise.all(remaining.map(r => r.unregister()));
+      await new Promise(r => setTimeout(r, 500));
+    }
+
+    // [v57] 3. 全新注册 SW
+    updatePushStatus('⏳ 注册新SW...', '#C4A86B');
+    const reg = await navigator.serviceWorker.register('sw.js');
+
+    // [v57] 4. 用 statechange 事件等待激活（比轮询更可靠）
+    if (!reg.active) {
+      const sw = reg.installing || reg.waiting;
+      if (sw) {
+        updatePushStatus('⏳ 等待SW激活...', '#C4A86B');
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('SW激活超时(20s)')), 20000);
+          sw.addEventListener('statechange', function f() {
+            if (sw.state === 'activated') {
+              clearTimeout(timeout);
+              sw.removeEventListener('statechange', f);
+              resolve();
+            }
+          });
+          // 如果 SW 在事件绑定前已经激活了
+          if (sw.state === 'activated') {
+            clearTimeout(timeout);
+            sw.removeEventListener('statechange', f);
+            resolve();
+          }
+        });
+      } else if (reg.waiting) {
+        // skipWaiting 已调用，可能在等待中
+        updatePushStatus('⏳ SW等待中...', '#C4A86B');
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('SW等待超时(20s)')), 20000);
+          reg.waiting.addEventListener('statechange', function f() {
+            if (reg.waiting.state === 'activated') {
+              clearTimeout(timeout);
+              reg.waiting.removeEventListener('statechange', f);
+              resolve();
+            }
+          });
+        });
+      } else {
+        // 没有 installing/waiting worker，可能已激活
+        // 用 reg.update() 触发更新，然后等待
+        updatePushStatus('⏳ 触发SW更新...', '#C4A86B');
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('SW更新超时(20s)')), 20000);
+          reg.addEventListener('updatefound', function f() {
+            const newSw = reg.installing;
+            if (newSw) {
+              newSw.addEventListener('statechange', function g() {
+                if (newSw.state === 'activated') {
+                  clearTimeout(timeout);
+                  newSw.removeEventListener('statechange', g);
+                  reg.removeEventListener('updatefound', f);
+                  resolve();
+                }
+              });
+            }
+          });
+          reg.update().catch(() => {});
+        });
+      }
+    }
+
+    updatePushStatus('⏳ 订阅中...', '#C4A86B');
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
       sub = await reg.pushManager.subscribe({
