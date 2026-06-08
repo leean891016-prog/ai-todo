@@ -382,11 +382,21 @@ function fireNotification(title, body, vibrate) {
 function showBanner(text, persistent) {
   const banner = document.getElementById('banner');
   const bannerText = document.getElementById('bannerText');
+  if (!banner || !bannerText) return;
   banner.style.cursor = persistent ? 'pointer' : '';
   bannerText.textContent = '🔔 ' + text;
   banner.classList.add('show');
   if (banner._timer) clearTimeout(banner._timer);
   if (!persistent) banner._timer = setTimeout(() => banner.classList.remove('show'), 2000);
+}
+
+// Always-visible push status indicator (bypasses banner visibility issues)
+function updatePushStatus(text, color) {
+  const el = document.getElementById('pushStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.style.color = color || '#8A7E72';
+  el.style.display = 'block';
 }
 
 function isExpired(todo) {
@@ -1244,39 +1254,51 @@ async function syncRemindersToBackend(silent) {
 async function requestPushPermission() {
   // Must be called from user gesture on iOS
   if (Notification.permission === 'default') {
+    updatePushStatus('⏳ 请求权限中...', '#C4A86B');
     const result = await Notification.requestPermission();
     if (result !== 'granted') {
+      updatePushStatus('🚫 权限被拒', '#e74c3c');
       showBanner('通知权限被拒绝，推送无法使用', true);
       return;
     }
+    updatePushStatus('✅ 权限已授权', '#7A9A7E');
   } else if (Notification.permission === 'denied') {
+    updatePushStatus('🚫 通知被禁用', '#e74c3c');
     showBanner('通知已被系统禁用，请到设置中开启', true);
     return;
   }
   // Permission granted, now subscribe and sync
+  updatePushStatus('⏳ 订阅推送中...', '#C4A86B');
   const sub = await subscribeToPush();
   if (!sub) {
+    updatePushStatus('❌ 订阅失败', '#e74c3c');
     showBanner('推送订阅失败，请检查网络后重试', true);
     return;
   }
   await syncRemindersToBackend(true);
+  updatePushStatus('✅ 推送已就绪', '#7A9A7E');
   showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
 }
 
 function setupPushNotifications() {
-  if (!('Notification' in window)) return;
+  if (!('Notification' in window)) {
+    updatePushStatus('⚠️ 此浏览器不支持通知', '#e74c3c');
+    return;
+  }
   if (Notification.permission === 'granted') {
+    updatePushStatus('✅ 通知已授权', '#7A9A7E');
     syncRemindersToBackend(true);
-    showBanner('✅ 通知权限已开启，戳右上菜单可手动同步', false);
     return;
   }
   if (Notification.permission === 'denied') {
+    updatePushStatus('🚫 通知被禁用', '#e74c3c');
     showBanner('⚠️ 通知被禁用，请到系统设置开启', true);
     return;
   }
-  // default: show clickable banner
+  // default: not yet asked
+  updatePushStatus('📢 未授权', '#C4A86B');
   const banner = document.getElementById('banner');
-  banner._pushAction = true;
+  if (banner) banner._pushAction = true;
   showBanner('🔔 点击此处开启推送提醒（锁屏也能收到）', true);
 }
 
