@@ -1239,6 +1239,43 @@ async function syncRemindersToBackend(silent) {
   }
 }
 
+// ========== Push Setup (user-triggered) ==========
+
+async function requestPushPermission() {
+  // Must be called from user gesture on iOS
+  if (Notification.permission === 'default') {
+    const result = await Notification.requestPermission();
+    if (result !== 'granted') {
+      showBanner('通知权限被拒绝，推送无法使用', true);
+      return;
+    }
+  } else if (Notification.permission === 'denied') {
+    showBanner('通知已被系统禁用，请到设置中开启', true);
+    return;
+  }
+  // Permission granted, now subscribe and sync
+  const sub = await subscribeToPush();
+  if (!sub) {
+    showBanner('推送订阅失败，请检查网络后重试', true);
+    return;
+  }
+  await syncRemindersToBackend(true);
+  showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
+}
+
+function setupPushNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') {
+    // Already granted, sync silently
+    syncRemindersToBackend(true);
+    return;
+  }
+  // Show clickable banner to enable push
+  const banner = document.getElementById('banner');
+  banner._pushAction = true;
+  showBanner('🔔 点击此处开启推送提醒（锁屏也能收到）', true);
+}
+
 // ========== Init ==========
 
 // One-time setup via URL parameter: ?setup=TOKEN
@@ -1257,12 +1294,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   render();
   // Pull from GitHub after render (non-blocking)
   syncFromGitHub();
-  // Sync reminders for push notifications
-  syncRemindersToBackend();
+  // Push notification setup (needs user gesture on iOS)
+  setupPushNotifications();
 
-  // Tap/click banner to dismiss
-  document.getElementById('banner').addEventListener('click', () => {
-    document.getElementById('banner').classList.remove('show');
+  // Tap banner to dismiss or trigger push setup
+  document.getElementById('banner').addEventListener('click', async () => {
+    const banner = document.getElementById('banner');
+    if (banner._pushAction) {
+      banner._pushAction = false;
+      banner.classList.remove('show');
+      await requestPushPermission();
+    } else {
+      banner.classList.remove('show');
+    }
   });
 
   // Tab switching

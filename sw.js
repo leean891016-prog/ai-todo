@@ -1,6 +1,8 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v43';
+const VERSION = 'v44';
 const CACHE = 'ai-todo-' + VERSION;
+
+// Self-destruct: unregister this SW so it stops caching
 const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192-v2.png', 'icon-512-v2.png'];
 
 self.addEventListener('install', (e) => {
@@ -11,6 +13,8 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
+  // Unregister self to stop all caching
+  self.registration.unregister();
   e.waitUntil((async () => {
     const keys = await caches.keys();
     await Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)));
