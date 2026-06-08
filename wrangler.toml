@@ -3,7 +3,7 @@ main = "push-worker.js"
 compatibility_date = "2024-12-01"
 
 kv_namespaces = [
-  { binding = "TODO_STORE", id = "PLACEHOLDER" }
+  { binding = "TODO_STORE", id = "f8123bc3a6c84a8c855b80b29aeaabd3" }
 ]
 
 [triggers]
