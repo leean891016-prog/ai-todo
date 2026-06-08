@@ -156,10 +156,6 @@ function checkAndFireReminders(todos, wideWindow) {
   }
 
   checkReviewTime();
-
-  document.getElementById('debugInfo').textContent =
-    '🕐 ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0') +
-    ' | check:' + (wideWindow ? 'wake' : 'tick') + ' | ' + getToday();
 }
 
 let scheduleTimer = null;
@@ -295,8 +291,6 @@ function addTodo(text, type, projectId) {
   }
 
   debugParts.push('text=' + trimmed.slice(0, 20));
-  document.getElementById('addDebug').textContent =
-    '🔍 解析 → ' + debugParts.join(' | ') + ' | 优先=点击圆点切换';
 
   const todos = loadTodos();
   todos.unshift({
@@ -1203,46 +1197,31 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
     setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 600000);
-
-    // Force update button
-    document.getElementById('updateBtn').addEventListener('click', async () => {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      for (const r of registrations) await r.unregister();
-      const keys = await caches.keys();
-      for (const k of keys) await caches.delete(k);
-      window.location.reload();
-    });
   }
 
-  // Notification button
-  const notifBtn = document.getElementById('notifBtn');
-  const debugInfo = document.getElementById('debugInfo');
+  // === Menu Toggle ===
+  const menuBtn = document.getElementById('menuBtn');
+  const menuDropdown = document.getElementById('menuDropdown');
+  menuBtn.addEventListener('click', (e) => { e.stopPropagation(); menuDropdown.classList.toggle('show'); });
+  document.addEventListener('click', (e) => {
+    if (!menuDropdown.contains(e.target) && e.target !== menuBtn) menuDropdown.classList.remove('show');
+  });
+  menuDropdown.addEventListener('click', () => menuDropdown.classList.remove('show'));
 
+  // === Notification ===
+  const notifBtn = document.getElementById('notifBtn');
   if (!('Notification' in window)) {
-    notifBtn.textContent = '⚠️ 不支持通知';
-    notifBtn.style.color = 'var(--danger)'; notifBtn.style.borderColor = 'var(--danger)';
+    notifBtn.textContent = '🚫 不支持通知';
   } else {
     function updateNotifBtn() {
-      const s = notifBtn.style;
-      if (Notification.permission === 'granted') {
-        notifBtn.textContent = '✅ 通知已开启';
-        s.color = '#34c759'; s.borderColor = '#34c759'; s.display = '';
-      } else if (Notification.permission === 'default') {
-        notifBtn.textContent = '🔔 开启提醒';
-        s.color = 'var(--accent)'; s.borderColor = 'var(--accent)'; s.display = '';
-        s.fontWeight = '600';
-      } else {
-        notifBtn.textContent = '🔕 通知已关闭 → 点此重试';
-        s.color = 'var(--danger)'; s.borderColor = 'var(--danger)'; s.display = '';
-      }
+      if (Notification.permission === 'granted') notifBtn.textContent = '🔔 提醒（已开）';
+      else if (Notification.permission === 'default') notifBtn.textContent = '🔔 开启提醒';
+      else notifBtn.textContent = '🔕 提醒（已关）';
     }
     notifBtn.addEventListener('click', async () => {
       if (Notification.permission === 'granted') return;
       const result = await Notification.requestPermission();
       updateNotifBtn();
-      if (result === 'denied') {
-        alert('请在系统设置中开启通知权限。\niPhone: 设置 → App → Safari → 通知');
-      }
     });
     updateNotifBtn();
   }
@@ -1253,11 +1232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     aiOrder = savedOrder;
     showAISortHint(savedOrder);
   }
-
-  debugInfo.textContent = (() => {
-    const now = new Date();
-    return '🕐 ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0') + ' | ' + getToday() + ' | ' + currentTab;
-  })();
 
   // === Theme Switcher ===
   const THEME_KEY = 'ai-todo-theme';
