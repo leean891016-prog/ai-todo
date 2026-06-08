@@ -64,41 +64,41 @@ body {
 .app { width: 100%; max-width: 480px; padding: 32px 24px 120px; }
 
 /* Page turn */
-.view-perspective { perspective: 1200px; }
+.view-perspective { perspective: 1200px; position: relative; }
+.view-page-back {
+  position: absolute; inset: 0;
+  backface-visibility: hidden;
+}
 .view-page {
+  position: relative;
   transform-origin: left center;
   backface-visibility: hidden;
 }
-.view-page.turning-out {
-  animation: pageOut 0.3s ease-in forwards;
+.view-page::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to right, rgba(0,0,0,0) 85%, rgba(0,0,0,0.12) 100%);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
 }
-.view-page.turning-in {
-  animation: pageIn 0.3s ease-out forwards;
+.view-page.turning-out::after,
+.view-page.turning-out-back::after {
+  opacity: 1;
+}
+.view-page.turning-out {
+  transform-origin: left center;
+  animation: pageOut 0.5s cubic-bezier(0.1, 0.0, 0.0, 1) forwards;
+}
+.view-page.turning-out-back {
+  transform-origin: right center;
+  animation: pageOutBack 0.5s cubic-bezier(0.1, 0.0, 0.0, 1) forwards;
 }
 @keyframes pageOut {
   0%   { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
   100% { transform: rotateY(-85deg); opacity: 0; filter: brightness(0.6); }
 }
-@keyframes pageIn {
-  0%   { transform: rotateY(85deg); opacity: 0; filter: brightness(0.6); }
-  100% { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
-}
-
-.view-page.turning-out-back {
-  transform-origin: right center;
-  animation: pageOutBack 0.3s ease-in forwards;
-}
-.view-page.turning-in-back {
-  transform-origin: right center;
-  animation: pageInBack 0.3s ease-out forwards;
-}
 @keyframes pageOutBack {
   0%   { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
   100% { transform: rotateY(85deg); opacity: 0; filter: brightness(0.6); }
-}
-@keyframes pageInBack {
-  0%   { transform: rotateY(-85deg); opacity: 0; filter: brightness(0.6); }
-  100% { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
 }
 
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; padding-bottom: 16px; border-bottom: var(--bw) solid var(--line); }
@@ -402,6 +402,43 @@ body {
 .theme-name { font-size: 15px; font-weight: var(--fw-body); color: var(--text); }
 .theme-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
 
+/* Font picker */
+.font-overlay {
+  position: fixed; inset: 0; z-index: 2100; background: rgba(0,0,0,0.2);
+  display: none; align-items: center; justify-content: center;
+}
+.font-overlay.show { display: flex; }
+.font-panel {
+  width: calc(100% - 48px); max-width: 340px;
+  background: var(--paper); border-radius: var(--radius);
+  padding: 24px 20px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  animation: fadeIn 0.25s ease;
+}
+.font-panel h3 { font-size: 18px; font-weight: var(--fw-title); margin-bottom: 16px; letter-spacing: var(--ls-title); }
+.font-list { display: flex; flex-direction: column; gap: 8px; }
+.font-opt {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px; border: var(--bw) solid var(--line);
+  border-radius: var(--radius); cursor: pointer; transition: all 0.15s;
+  background: var(--bg);
+}
+.font-opt:active { border-color: var(--accent); }
+.font-opt.active { border-color: var(--accent); border-width: 2px; }
+.font-preview {
+  width: 44px; height: 44px; flex-shrink: 0;
+  border-radius: var(--radius); background: var(--paper);
+  border: var(--bw) solid var(--line);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; color: var(--text);
+}
+.font-info { flex: 1; }
+.font-name { font-size: 15px; font-weight: var(--fw-body); color: var(--text); }
+.font-info .font-sample {
+  font-size: 13px; color: var(--text-dim); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
 /* Sync settings */
 .sync-overlay {
   position: fixed; inset: 0; z-index: 2100; background: rgba(0,0,0,0.2);
@@ -506,7 +543,7 @@ body {
     <button class="menu-btn" id="menuBtn">···</button>
   </div>
 
-  <div class="view-perspective"><div class="view-page" id="viewContent"></div></div>
+  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="view-page" id="viewContent"></div></div>
 
   <div id="aiSuggestion" style="display:none;font-size:12px;color:var(--text-dim);text-align:left;padding:10px 0;line-height:1.5;font-style:italic;letter-spacing:0.5px;"></div>
 </div>
@@ -515,6 +552,7 @@ body {
   <button id="aiSortBtn">🔀 AI 排序</button>
   <button id="musicToggle">🎵 早晚音乐</button>
   <button id="themeBtn">🎨 主题</button>
+  <button id="fontBtn">🔤 字体</button>
   <button id="notifBtn">🔔 提醒</button>
   <button id="syncBtn">☁️ 同步</button>
 </div>
@@ -530,6 +568,13 @@ body {
   <div class="theme-panel">
     <h3>🎨 选择主题</h3>
     <div class="theme-list" id="themeList"></div>
+  </div>
+</div>
+
+<div class="font-overlay" id="fontOverlay">
+  <div class="font-panel">
+    <h3>🔤 选择字体</h3>
+    <div class="font-list" id="fontList"></div>
   </div>
 </div>
 
@@ -571,6 +616,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=31"></script>
+<script src="app.js?v=32"></script>
 </body>
 </html>

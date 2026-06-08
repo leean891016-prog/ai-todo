@@ -516,32 +516,35 @@ let showReport = false;
 function switchTab(tab) {
   if (tab === currentTab) return;
   const view = document.getElementById('viewContent');
+  const back = document.getElementById('viewBack');
   if (!view || isAnimating) { currentTab = tab; render(); return; }
   isAnimating = true;
 
+  // Pre-render target content into back layer (the "next page" underneath)
+  const savedHTML = view.innerHTML;
+  const savedTab = currentTab;
+  currentTab = tab;
+  render();
+  back.innerHTML = view.innerHTML.replace(/\s+id="[^"]*"/g, ''); // strip ids to avoid DOM conflicts
+  view.innerHTML = savedHTML;
+  currentTab = savedTab;
+
+  // Determine direction
   const tabs = ['inspiration', 'daily', 'projects'];
   const forward = tabs.indexOf(tab) > tabs.indexOf(currentTab);
   const outClass = forward ? 'turning-out' : 'turning-out-back';
-  const inClass = forward ? 'turning-in' : 'turning-in-back';
 
   view.classList.add(outClass);
   view.addEventListener('animationend', function handler() {
     view.removeEventListener('animationend', handler);
     view.classList.remove(outClass);
+    back.innerHTML = '';
 
     currentTab = tab;
     currentProjectId = null;
     document.querySelectorAll('.tab-bar button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     render();
-
-    requestAnimationFrame(() => {
-      view.classList.add(inClass);
-      view.addEventListener('animationend', function h2() {
-        view.removeEventListener('animationend', h2);
-        view.classList.remove(inClass);
-        isAnimating = false;
-      });
-    });
+    isAnimating = false;
   });
 }
 
@@ -1677,6 +1680,54 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('themeOverlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('themeOverlay').classList.remove('show');
   });
+
+  // === Font Switcher ===
+  const FONT_KEY = 'ai-todo-font';
+  const fonts = [
+    { id: 'default', name: '系统默认', sample: '字体随主题变化，清爽现代', stack: '' },
+    { id: 'song',    name: '宋体',     sample: '书卷气，温润典雅', stack: '"Songti SC", "Noto Serif SC", "STSong", serif' },
+    { id: 'kai',     name: '楷体',     sample: '手写感，自然舒展', stack: '"Kaiti SC", "STKaiti", "AR PL UKai CN", serif' },
+  ];
+
+  function getFont() { return localStorage.getItem(FONT_KEY) || 'default'; }
+  function setFont(id) {
+    localStorage.setItem(FONT_KEY, id);
+    const font = fonts.find(f => f.id === id);
+    if (font && font.stack) {
+      document.documentElement.style.setProperty('--font', font.stack);
+    } else {
+      document.documentElement.style.removeProperty('--font');
+    }
+    renderFontList();
+  }
+
+  function renderFontList() {
+    const list = document.getElementById('fontList');
+    if (!list) return;
+    const current = getFont();
+    list.innerHTML = fonts.map(f => `
+      <div class="font-opt${f.id === current ? ' active' : ''}" data-font="${f.id}">
+        <div class="font-preview" style="font-family:${f.stack || 'inherit'}">字</div>
+        <div class="font-info">
+          <div class="font-name">${f.name}</div>
+          <div class="font-sample" style="font-family:${f.stack || 'inherit'}">${f.sample}</div>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('.font-opt').forEach(el => {
+      el.addEventListener('click', () => setFont(el.dataset.font));
+    });
+  }
+
+  document.getElementById('fontBtn').addEventListener('click', () => {
+    renderFontList();
+    document.getElementById('fontOverlay').classList.add('show');
+  });
+  document.getElementById('fontOverlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) document.getElementById('fontOverlay').classList.remove('show');
+  });
+
+  // Apply saved font on load
+  setFont(getFont());
 
   // === Sync Settings ===
   const syncOverlay = document.getElementById('syncOverlay');
