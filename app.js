@@ -639,6 +639,51 @@ function deleteTodo(id) {
   saveTodos(loadTodos().filter(t => t.id !== id)); render();
 }
 
+function startEdit(todoId) {
+  const todos = loadTodos();
+  const todo = todos.find(t => t.id === todoId);
+  if (!todo || todo.completed) return;
+
+  const li = document.querySelector('.todo-item[data-id="' + todoId + '"]');
+  if (!li || li._editing) return;
+  li._editing = true;
+
+  const textSpan = li.querySelector('.text');
+  if (!textSpan) return;
+  textSpan._originalHTML = textSpan.innerHTML;
+  textSpan.innerHTML = '';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'todo-edit-input';
+  input.value = todo.text;
+  textSpan.appendChild(input);
+
+  requestAnimationFrame(() => { input.focus(); input.select(); });
+
+  let handled = false;
+  function finish(save) {
+    if (handled) return;
+    handled = true;
+    li._editing = false;
+    if (save) {
+      const newText = input.value.trim();
+      if (newText && newText !== todo.text) {
+        todo.text = newText;
+        todo.updatedAt = nowISO();
+        saveTodos(todos);
+      }
+    }
+    render();
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    else if (e.key === 'Escape') { finish(false); }
+  });
+  input.addEventListener('blur', () => setTimeout(() => finish(true), 150));
+}
+
 // ========== Projects ==========
 
 function addProject(name) {
@@ -1064,6 +1109,10 @@ function bindListEvents() {
         e.stopPropagation();
         const id = e.target.closest('[data-action="cycle-priority"]').dataset.id;
         cyclePriority(id);
+      } else if (e.target.closest('.circle')) {
+        toggleTodo(el.dataset.id);
+      } else if (e.target.closest('.text')) {
+        startEdit(el.dataset.id);
       } else {
         toggleTodo(el.dataset.id);
       }
