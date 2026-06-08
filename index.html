@@ -299,6 +299,14 @@ body {
 .link-btn:active { color: var(--accent); }
 .link-btn.linked { color: var(--accent); }
 
+.priority-btn {
+  flex-shrink: 0; width: 36px; height: 36px; border: none; background: none;
+  font-size: 14px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.priority-btn:active { transform: scale(1.2); }
+
 .link-overlay {
   position: fixed; inset: 0; z-index: 2000; background: rgba(60,56,53,0.15);
   display: none; align-items: center; justify-content: center;
@@ -613,6 +621,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=23"></script>
+<script src="app.js?v=24"></script>
 </body>
 </html>

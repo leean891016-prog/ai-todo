@@ -785,6 +785,13 @@ function renderInspiration() {
   });
 }
 
+function priorityBtn(todo) {
+  const icon = todo.priority === 'both' ? '🔥' : todo.priority === 'important' ? '⭐' :
+    todo.priority === 'urgent' ? '⚡' : '▸';
+  const opacity = todo.priority ? '' : ' style=\"opacity:0.3\"';
+  return '<button class=\"priority-btn\" data-action=\"pri-menu\" data-id=\"' + todo.id + '\"' + opacity + '>' + icon + '</button>';
+}
+
 function priorityBar(todo) {
   const imp = (todo.priority === 'important' || todo.priority === 'both');
   const urg = (todo.priority === 'urgent' || todo.priority === 'both');
@@ -885,6 +892,7 @@ function renderDaily() {
       '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
       (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
       priorityBar(t) +
+      priorityBtn(t) +
       '<button class="link-btn' + (t.linkGroup ? ' linked' : '') + '" data-action="link-todo" data-id="' + t.id + '">📎</button>' +
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
@@ -899,6 +907,7 @@ function renderDaily() {
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
         '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
+        priorityBtn(t) +
         priorityBar(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
@@ -1023,6 +1032,7 @@ function renderProjectDetail(projectId) {
       html += '<li class="todo-item" data-id="' + t.id + '">' +
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
+        priorityBtn(t) +
         priorityBar(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
@@ -1122,6 +1132,9 @@ function bindListEvents() {
       if (e.target.closest('[data-action="delete"]')) {
         e.stopPropagation();
         deleteTodo(el.dataset.id);
+      } else if (e.target.closest('[data-action="pri-menu"]')) {
+        e.stopPropagation();
+        showPriorityMenu(e.target.closest('[data-action="pri-menu"]').dataset.id);
       } else if (e.target.closest('[data-action="link-todo"]')) {
         e.stopPropagation();
         showLinkPanel(el.dataset.id);
