@@ -1,4 +1,13 @@
 // v2
+// IMMEDIATE diagnostic (runs synchronously before anything else)
+(function(){
+  var d = document.createElement('div');
+  d.id = 'pushDiagEarly';
+  d.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:99999;background:#1a1a1a;color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;font-family:monospace;max-width:90vw;word-break:break-all';
+  d.textContent = 'N=' + typeof window.Notification + ' SW=' + ('serviceWorker' in navigator) + ' PM=' + ('PushManager' in window) + ' p=' + (typeof window.Notification!=='undefined' ? window.Notification.permission : 'N/A');
+  document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(d); });
+})();
+
 // ========== Config ==========
 
 // ========== Time Parser ==========
