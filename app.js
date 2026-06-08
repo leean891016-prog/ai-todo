@@ -1796,34 +1796,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
-  // === Swipe navigation ===
-  (function setupSwipe() {
-    const tabs = ['inspiration', 'daily', 'projects'];
-    let startX = 0, startY = 0;
-    const app = document.querySelector('.app');
-    if (!app) return;
-
-    app.addEventListener('touchstart', (e) => {
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-    }, { passive: true });
-
-    app.addEventListener('touchend', (e) => {
-      const dx = e.changedTouches[0].clientX - startX;
-      const dy = e.changedTouches[0].clientY - startY;
-      // Require horizontal swipe > 60px and more horizontal than vertical
-      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-      // Don't swipe in project detail view
-      if (currentProjectId) return;
-
-      const idx = tabs.indexOf(currentTab);
-      if (dx > 0 && idx > 0) {
-        switchTab(tabs[idx - 1]);
-      } else if (dx < 0 && idx < tabs.length - 1) {
-        switchTab(tabs[idx + 1]);
-      }
-    });
-  })();
 });
 
 document.addEventListener('visibilitychange', () => {
