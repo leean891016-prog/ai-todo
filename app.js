@@ -1029,11 +1029,6 @@ function renderProjectDetail(projectId) {
 // Priority menu
 let _priorityMenuTodoId = null;
 function showPriorityMenu(todoId) {
-  // Lock panel from clicks for 400ms to prevent accidental selection on touchend
-  const panel = document.querySelector('.priority-menu-panel');
-  panel.style.pointerEvents = 'none';
-  setTimeout(() => { panel.style.pointerEvents = ''; }, 400);
-
   _priorityMenuTodoId = todoId;
   const todos = loadTodos();
   const todo = todos.find(t => t.id === todoId);
@@ -1069,41 +1064,7 @@ function bindListEvents() {
   document.querySelectorAll('.todo-item').forEach(el => {
     if (el._bound) return; el._bound = true;
 
-    let pressTimer = null;
-    let didLongPress = false;
-    let startX = 0, startY = 0;
-
-    function clearPress() {
-      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
-    }
-
-    el.addEventListener('touchstart', (e) => {
-      didLongPress = false;
-      startX = e.touches[0].clientX;
-      startY = e.touches[0].clientY;
-      pressTimer = setTimeout(() => {
-        // Check didn't move too much
-        didLongPress = true;
-        showPriorityMenu(el.dataset.id);
-      }, 500);
-    }, { passive: true });
-
-    el.addEventListener('touchmove', (e) => {
-      const dx = Math.abs(e.touches[0].clientX - startX);
-      const dy = Math.abs(e.touches[0].clientY - startY);
-      if (dx > 10 || dy > 10) clearPress(); // Cancel if scrolled
-    }, { passive: true });
-
-    el.addEventListener('touchend', (e) => {
-      clearPress();
-      if (didLongPress) {
-        e.preventDefault();
-        return; // Prevent click after long press
-      }
-    });
-
     el.addEventListener('click', (e) => {
-      if (didLongPress) return;
       if (e.target.closest('[data-action="delete"]')) {
         e.stopPropagation();
         deleteTodo(el.dataset.id);
