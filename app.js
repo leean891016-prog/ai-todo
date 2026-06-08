@@ -1258,6 +1258,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const now = new Date();
     return '🕐 ' + now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0') + ':' + now.getSeconds().toString().padStart(2,'0') + ' | ' + getToday() + ' | ' + currentTab;
   })();
+
+  // === Theme Switcher ===
+  const THEME_KEY = 'ai-todo-theme';
+  const themes = [
+    { id: 'paper', name: '宣纸', desc: '暖色纸质书质感', dot: 'paper' },
+    { id: 'zen',   name: '禅意', desc: '大量留白，专注极简', dot: 'zen' },
+    { id: 'pop',   name: '活力', desc: '粗边框、亮色、年轻感', dot: 'pop' },
+    { id: 'dark',  name: '暗夜', desc: '护眼深色模式', dot: 'dark' },
+  ];
+
+  function getTheme() { return localStorage.getItem(THEME_KEY) || 'paper'; }
+  function setTheme(id) {
+    localStorage.setItem(THEME_KEY, id);
+    document.documentElement.setAttribute('data-theme', id);
+    document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+    renderThemeList();
+  }
+
+  function renderThemeList() {
+    const list = document.getElementById('themeList');
+    if (!list) return;
+    const current = getTheme();
+    list.innerHTML = themes.map(t => `
+      <div class="theme-opt${t.id === current ? ' active' : ''}" data-theme="${t.id}">
+        <div class="theme-dot ${t.dot}"></div>
+        <div class="theme-info">
+          <div class="theme-name">${t.name}</div>
+          <div class="theme-desc">${t.desc}</div>
+        </div>
+      </div>`).join('');
+    list.querySelectorAll('.theme-opt').forEach(el => {
+      el.addEventListener('click', () => setTheme(el.dataset.theme));
+    });
+  }
+
+  document.getElementById('themeBtn').addEventListener('click', () => {
+    renderThemeList();
+    document.getElementById('themeOverlay').classList.add('show');
+  });
+  document.getElementById('themeOverlay').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) document.getElementById('themeOverlay').classList.remove('show');
+  });
+
+  // Apply saved theme on load
+  setTheme(getTheme());
 });
 
 document.addEventListener('visibilitychange', () => {
