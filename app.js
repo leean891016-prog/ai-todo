@@ -1043,11 +1043,12 @@ function renderProjectDetail(projectId) {
 
 // Priority menu
 let _priorityMenuTodoId = null;
-let _menuLocked = false;
-
 function showPriorityMenu(todoId) {
-  _menuLocked = true;
-  setTimeout(() => { _menuLocked = false; }, 400);
+  // Lock panel from clicks for 400ms to prevent accidental selection on touchend
+  const panel = document.querySelector('.priority-menu-panel');
+  panel.style.pointerEvents = 'none';
+  setTimeout(() => { panel.style.pointerEvents = ''; }, 400);
+
   _priorityMenuTodoId = todoId;
   const todos = loadTodos();
   const todo = todos.find(t => t.id === todoId);
@@ -1815,7 +1816,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('priorityMenuCancel').addEventListener('click', hidePriorityMenu);
   document.querySelectorAll('.priority-menu-item').forEach(item => {
-    item.addEventListener('click', () => { if (_menuLocked) return; setPriorityFromMenu(item.dataset.pri); });
+    item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
   // === Swipe navigation ===
