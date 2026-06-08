@@ -180,6 +180,163 @@ function saveProjects(projects) {
 }
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function nowISO() { return new Date().toISOString(); }
+
+// Stamp updatedAt on all items that don't have it (migration)
+function _stampUpdatedAt(items) {
+  let changed = false;
+  items.forEach(item => {
+    if (!item.updatedAt) { item.updatedAt = nowISO(); changed = true; }
+  });
+  return changed;
+}
+
+// ========== GitHub Sync ==========
+// Data syncs automatically across devices via GitHub repo
+
+const REPO_OWNER = 'leean891016-prog';
+const REPO_NAME = 'ai-todo';
+const DATA_PATH = 'data.json';
+const SYNC_TOKEN_KEY = 'ai-todo-sync-token';
+
+function getSyncToken() {
+  return localStorage.getItem(SYNC_TOKEN_KEY) || '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';
+}
+
+let _syncPending = false;
+let _syncTimer = null;
+
+async function _githubAPI(method, body) {
+  const token = getSyncToken();
+  if (!token) throw new Error('no token');
+  const url = 'https://api.github.com/repos/' + REPO_OWNER + '/' + REPO_NAME + '/contents/' + DATA_PATH;
+  const headers = {
+    'Authorization': 'token ' + token,
+    'Content-Type': 'application/json',
+  };
+  const opts = { method, headers };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(url, opts);
+  if (!resp.ok) {
+    if (resp.status === 404) return null; // file not found
+    throw new Error('GitHub API error: ' + resp.status);
+  }
+  return resp.json();
+}
+
+async function fetchRemoteData() {
+  try {
+    const data = await _githubAPI('GET');
+    if (!data || !data.content) return null;
+    const json = JSON.parse(atob(data.content.replace(/\s/g, '')));
+    return { ...json, _sha: data.sha };
+  } catch (e) {
+    console.warn('GitHub fetch failed:', e.message);
+    return null;
+  }
+}
+
+async function pushRemoteData(todos, projects) {
+  try {
+    // Get current file SHA first (needed for update)
+    let sha = null;
+    try {
+      const existing = await _githubAPI('GET');
+      if (existing) sha = existing.sha;
+    } catch {}
+
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify({ todos, projects }))));
+    const body = { message: 'sync: ' + new Date().toLocaleString('zh-CN'), content };
+    if (sha) body.sha = sha;
+    await _githubAPI('PUT', body);
+    return true;
+  } catch (e) {
+    console.warn('GitHub push failed:', e.message);
+    return false;
+  }
+}
+
+function mergeByUpdatedAt(localItems, remoteItems) {
+  const map = new Map();
+  // Local first
+  localItems.forEach(item => map.set(item.id, item));
+  // Remote overwrites if newer
+  remoteItems.forEach(item => {
+    const existing = map.get(item.id);
+    if (!existing || (item.updatedAt > existing.updatedAt)) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
+}
+
+async function syncFromGitHub() {
+  if (!getSyncToken()) return;
+  try {
+    const remote = await fetchRemoteData();
+    if (!remote || !remote.todos) return;
+
+    const mergedTodos = mergeByUpdatedAt(_todosCache, remote.todos);
+    const mergedProjects = mergeByUpdatedAt(_projectsCache, remote.projects || []);
+
+    // Check if anything changed
+    const changed = mergedTodos.length !== _todosCache.length ||
+      mergedProjects.length !== _projectsCache.length ||
+      JSON.stringify(mergedTodos) !== JSON.stringify(_todosCache) ||
+      JSON.stringify(mergedProjects) !== JSON.stringify(_projectsCache);
+
+    if (changed) {
+      _todosCache = mergedTodos;
+      _projectsCache = mergedProjects;
+      syncToLocalStorage();
+      _saveTodosToDB(mergedTodos);
+      _saveProjectsToDB(mergedProjects);
+      render();
+      showBanner('已从云端同步 ' + mergedTodos.length + ' 条记录');
+    }
+
+    // Also push local changes that remote didn't have
+    scheduleSyncToGitHub();
+  } catch (e) {
+    console.warn('Sync pull failed:', e.message);
+  }
+}
+
+function scheduleSyncToGitHub() {
+  if (!getSyncToken()) return;
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(async () => {
+    const ok = await pushRemoteData(_todosCache, _projectsCache);
+    if (!ok) {
+      // If push failed (e.g. conflict), pull and merge, then retry
+      const remote = await fetchRemoteData();
+      if (remote && remote.todos) {
+        _todosCache = mergeByUpdatedAt(_todosCache, remote.todos);
+        _projectsCache = mergeByUpdatedAt(_projectsCache, remote.projects || []);
+        syncToLocalStorage();
+        _saveTodosToDB(_todosCache);
+        _saveProjectsToDB(_projectsCache);
+        await pushRemoteData(_todosCache, _projectsCache);
+      }
+    }
+  }, 2000);
+}
+
+// Override save functions to trigger sync
+const _origSaveTodos = saveTodos;
+const _origSaveProjects = saveProjects;
+saveTodos = function(todos) {
+  _stampUpdatedAt(todos);
+  todos.forEach(t => { if (!t.updatedAt) t.updatedAt = nowISO(); });
+  _origSaveTodos(todos);
+  scheduleSyncToGitHub();
+};
+saveProjects = function(projects) {
+  _stampUpdatedAt(projects);
+  projects.forEach(p => { if (!p.updatedAt) p.updatedAt = nowISO(); });
+  _origSaveProjects(projects);
+  scheduleSyncToGitHub();
+};
 
 // ========== Notification Engine ==========
 
@@ -409,6 +566,7 @@ function addTodo(text, type, projectId) {
     type, projectId: projectId || null,
     reminderTime, reminderDate, priority: null,
     linkGroup: null, postponeCount: 0,
+    updatedAt: nowISO(),
   });
   saveTodos(todos); render();
 
@@ -500,7 +658,7 @@ function deleteTodo(id) {
 function addProject(name) {
   const trimmed = name.trim(); if (!trimmed) return;
   const projects = loadProjects();
-  projects.push({ id: genId(), name: trimmed, createdAt: getToday() });
+  projects.push({ id: genId(), name: trimmed, createdAt: getToday(), updatedAt: nowISO() });
   saveProjects(projects); render();
 }
 
@@ -1253,6 +1411,8 @@ function render() {
 document.addEventListener('DOMContentLoaded', async () => {
   await initStorage();
   render();
+  // Pull from GitHub after render (non-blocking)
+  syncFromGitHub();
 
   // Tab switching
   document.querySelectorAll('.tab-bar button').forEach(btn => {
@@ -1427,8 +1587,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     loadNotified();
-    // Fire system notifications for all missed reminders
     checkAndFireReminders(loadTodos(), true);
     render();
+    // Pull latest from GitHub when app comes to foreground
+    syncFromGitHub();
   }
 });
