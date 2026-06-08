@@ -1511,6 +1511,8 @@ function setupPushNotifications() {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // [v63] 页面加载时提取GitHub token（从URL参数或localStorage）
+  getGitHubToken();
   await initStorage();
   render();
   // Pull from GitHub after render (non-blocking)
