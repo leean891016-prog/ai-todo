@@ -1222,7 +1222,25 @@ function render() {
 
 // ========== Push Notifications ==========
 
+// GitHub API sync (国内可访问) — token通过URL参数?token=xxx或localStorage传入
+function getGitHubToken() {
+  // 1) URL参数
+  const p = new URLSearchParams(location.search);
+  const t = p.get('token');
+  if (t && t.startsWith('github_pat_')) {
+    localStorage.setItem('gh-push-token', t);
+    // 清除URL参数
+    history.replaceState({}, '', location.pathname);
+    return t;
+  }
+  // 2) localStorage
+  return localStorage.getItem('gh-push-token') || '';
+}
+const GITHUB_DATA_FILE = 'https://api.github.com/repos/leean891016-prog/ai-todo/contents/push-data.json';
+
+// Cloudflare Worker (国外可用) — fallback
 const PUSH_WORKER_URL = 'https://ai-todo-push.leean891016.workers.dev';
+const USE_GITHUB_API = true; // 国内用户用GitHub API
 
 const VAPID_PUBLIC_KEY = 'BO8R1QOlLq7U_Ro6dnUm_2XnEESRSsQ84pff0HCkNEjvuEHAMR-6Hvm81NtPAjksRtfeHUaLLUGQsLSuNW5Fasg';
 
@@ -1315,7 +1333,57 @@ async function syncRemindersWithSub(sub, silent) {
     .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
   console.log('[sync] deviceId:', deviceId, 'reminders:', reminders.length, 'sub:', !!sub);
 
-  // 10s timeout — Cloudflare Workers 在国内可能慢
+  const gitHubToken = getGitHubToken();
+  if (USE_GITHUB_API && gitHubToken) {
+    // === GitHub Contents API (国内可用) ===
+    try {
+      // 1. 读取当前数据（获取SHA）
+      let sha = null;
+      let data = { devices: {} };
+      try {
+        const getResp = await fetch(GITHUB_DATA_FILE, {
+          headers: { Authorization: 'token ' + gitHubToken, Accept: 'application/vnd.github+json' },
+        });
+        if (getResp.ok) {
+          const file = await getResp.json();
+          sha = file.sha;
+          data = JSON.parse(decodeURIComponent(escape(atob(file.content))));
+        }
+      } catch(e) { /* first sync, file may not exist */ }
+
+      // 2. 合并设备数据
+      data.devices[deviceId] = {
+        subscription: sub.toJSON(),
+        reminders: reminders,
+        updatedAt: Date.now(),
+      };
+
+      // 3. 写回
+      const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+      const body = { message: 'sync: update ' + deviceId, content };
+      if (sha) body.sha = sha;
+
+      const putResp = await fetch(GITHUB_DATA_FILE, {
+        method: 'PUT',
+        headers: {
+          Authorization: 'token ' + gitHubToken,
+          Accept: 'application/vnd.github+json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!putResp.ok) throw new Error('GitHub ' + putResp.status);
+      if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
+      console.log('[sync] GitHub write OK');
+      return;
+    } catch (e) {
+      console.warn('[sync] GitHub failed:', e.message);
+      // Fall through to Worker attempt
+    }
+  }
+
+  // === Cloudflare Worker (fallback) ===
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 10000);
   try {
