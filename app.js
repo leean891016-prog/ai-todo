@@ -1231,6 +1231,16 @@ function getDeviceId() {
 
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  if (!('Notification' in window)) return null;
+
+  // Request notification permission if not yet granted
+  if (Notification.permission === 'default') {
+    const result = await Notification.requestPermission();
+    if (result !== 'granted') return null;
+  } else if (Notification.permission === 'denied') {
+    return null;
+  }
+
   try {
     const reg = await navigator.serviceWorker.ready;
     let sub = await reg.pushManager.getSubscription();
@@ -1317,27 +1327,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').then(reg => {
-      // Auto-reload when SW sends NEW_VERSION message
-      navigator.serviceWorker.addEventListener('message', (e) => {
-        if (e.data && e.data.type === 'NEW_VERSION') {
-          window.location.reload();
-        }
-      });
-      // On update found, auto skipWaiting and reload
-      reg.addEventListener('updatefound', () => {
-        const newWorker = reg.installing;
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            newWorker.postMessage('skipWaiting');
-          }
-        });
-      });
-    });
-    // Check for updates every 5 minutes
-    setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
-  }
+  // === Service Worker DISABLED for development ===
+  // if ('serviceWorker' in navigator) {
+  //   navigator.serviceWorker.register('sw.js').then(reg => {
+  //     navigator.serviceWorker.addEventListener('message', (e) => {
+  //       if (e.data && e.data.type === 'NEW_VERSION') { window.location.reload(); }
+  //     });
+  //     reg.addEventListener('updatefound', () => {
+  //       const newWorker = reg.installing;
+  //       newWorker.addEventListener('statechange', () => {
+  //         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+  //           newWorker.postMessage('skipWaiting');
+  //         }
+  //       });
+  //     });
+  //   });
+  //   setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
+  // }
 
   // === Menu Toggle ===
   const menuBtn = document.getElementById('menuBtn');
@@ -1466,7 +1472,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     var tabs = ['inspiration', 'daily', 'projects'];
     var MAX_DRAG = 280;
 	    var THRESHOLD = 10;
-	    var COMPLETE_PCT = 0.38;
+	    var COMPLETE_PCT = 0.50;
 
     var startX = 0, startY = 0;
     var swiping = false;
