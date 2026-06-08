@@ -415,6 +415,41 @@ body {
 .theme-info { flex: 1; }
 .theme-name { font-size: 15px; font-weight: var(--fw-body); color: var(--text); }
 .theme-desc { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+/* Sync settings */
+.sync-overlay {
+  position: fixed; inset: 0; z-index: 2100; background: rgba(0,0,0,0.2);
+  display: none; align-items: center; justify-content: center;
+}
+.sync-overlay.show { display: flex; }
+.sync-panel {
+  width: calc(100% - 48px); max-width: 340px;
+  background: var(--paper); border-radius: var(--radius);
+  padding: 24px 20px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  animation: fadeIn 0.25s ease;
+}
+.sync-panel h3 { font-size: 18px; font-weight: var(--fw-title); margin-bottom: 8px; letter-spacing: var(--ls-title); }
+.sync-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.5; }
+.sync-label { font-size: 13px; font-weight: var(--fw-body); display: block; margin-bottom: 6px; }
+.sync-input {
+  width: 100%; padding: 10px 12px; border: var(--bw) solid var(--line);
+  border-radius: var(--radius); font-size: 13px; font-family: monospace;
+  background: var(--bg); color: var(--text); box-sizing: border-box;
+}
+.sync-input:focus { outline: none; border-color: var(--accent); }
+.sync-hint { font-size: 11px; color: var(--green); margin-top: 6px; min-height: 18px; }
+.sync-hint.error { color: var(--warn); }
+.sync-buttons { display: flex; gap: 8px; margin-top: 16px; }
+.sync-save-btn {
+  flex: 1; padding: 10px; border: none; border-radius: var(--radius);
+  background: var(--accent); color: #fff; font-size: 14px; cursor: pointer;
+}
+.sync-cancel-btn {
+  padding: 10px 16px; border: var(--bw) solid var(--line);
+  border-radius: var(--radius); background: var(--bg); color: var(--text-dim);
+  font-size: 14px; cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -447,6 +482,7 @@ body {
   <button id="musicToggle">🎵 早晚音乐</button>
   <button id="themeBtn">🎨 主题</button>
   <button id="notifBtn">🔔 提醒</button>
+  <button id="syncBtn">☁️ 同步</button>
 </div>
 
 <nav class="tab-bar">
@@ -479,6 +515,20 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=9"></script>
+<div class="sync-overlay" id="syncOverlay">
+  <div class="sync-panel">
+    <h3>☁️ 跨设备同步</h3>
+    <div class="sync-sub">在手机和电脑输入同一个 Token，数据自动同步</div>
+    <label class="sync-label" for="syncTokenInput">GitHub Token</label>
+    <input type="password" id="syncTokenInput" class="sync-input" placeholder="ghp_..." autocomplete="off">
+    <div class="sync-hint" id="syncHint"></div>
+    <div class="sync-buttons">
+      <button class="sync-save-btn" id="syncSaveBtn">保存并同步</button>
+      <button class="sync-cancel-btn" id="syncCancelBtn">取消</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js?v=10"></script>
 </body>
 </html>

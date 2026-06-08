@@ -200,7 +200,7 @@ const DATA_PATH = 'data.json';
 const SYNC_TOKEN_KEY = 'ai-todo-sync-token';
 
 function getSyncToken() {
-  return localStorage.getItem(SYNC_TOKEN_KEY) || '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';
+  return localStorage.getItem(SYNC_TOKEN_KEY) || '';
 }
 
 let _syncPending = false;
@@ -1578,6 +1578,67 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   document.getElementById('themeOverlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) document.getElementById('themeOverlay').classList.remove('show');
+  });
+
+  // === Sync Settings ===
+  const syncOverlay = document.getElementById('syncOverlay');
+  const syncTokenInput = document.getElementById('syncTokenInput');
+  const syncHint = document.getElementById('syncHint');
+  const syncBtn = document.getElementById('syncBtn');
+
+  function updateSyncBtnLabel() {
+    if (getSyncToken()) syncBtn.textContent = '☁️ 同步（已设）';
+    else syncBtn.textContent = '☁️ 同步设置';
+  }
+  updateSyncBtnLabel();
+
+  syncBtn.addEventListener('click', () => {
+    syncTokenInput.value = getSyncToken();
+    syncHint.textContent = '';
+    syncHint.className = 'sync-hint';
+    syncOverlay.classList.add('show');
+    setTimeout(() => syncTokenInput.focus(), 200);
+  });
+
+  document.getElementById('syncCancelBtn').addEventListener('click', () => {
+    syncOverlay.classList.remove('show');
+  });
+  syncOverlay.addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) syncOverlay.classList.remove('show');
+  });
+
+  document.getElementById('syncSaveBtn').addEventListener('click', async () => {
+    const token = syncTokenInput.value.trim();
+    if (!token) {
+      syncHint.textContent = '请输入 Token';
+      syncHint.className = 'sync-hint error';
+      return;
+    }
+    if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
+      syncHint.textContent = 'Token 格式不正确，应以 ghp_ 或 github_pat_ 开头';
+      syncHint.className = 'sync-hint error';
+      return;
+    }
+    syncHint.textContent = '正在验证...';
+    syncHint.className = 'sync-hint';
+    localStorage.setItem(SYNC_TOKEN_KEY, token);
+    updateSyncBtnLabel();
+
+    // Test the token by fetching
+    try {
+      const remote = await fetchRemoteData();
+      syncHint.textContent = remote ? '✓ 同步成功！已连接云端' : '✓ Token 已保存，首次同步将创建云端数据';
+      syncHint.className = 'sync-hint';
+      if (remote && remote.todos) {
+        syncFromGitHub();
+      } else {
+        // Push local data to create the file
+        await pushRemoteData(_todosCache, _projectsCache);
+      }
+    } catch (e) {
+      syncHint.textContent = '⚠️ 连接失败：' + e.message + '，Token 已保存';
+      syncHint.className = 'sync-hint error';
+    }
   });
 
   // Apply saved theme on load
