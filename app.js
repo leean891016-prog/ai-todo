@@ -1293,12 +1293,6 @@ function setupPushNotifications() {
   }
 })();
 
-// Kill any lingering Service Worker caches
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => {
-    regs.forEach(r => r.unregister());
-  });
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initStorage();
@@ -1345,23 +1339,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // === Service Worker DISABLED for development ===
-  // if ('serviceWorker' in navigator) {
-  //   navigator.serviceWorker.register('sw.js').then(reg => {
-  //     navigator.serviceWorker.addEventListener('message', (e) => {
-  //       if (e.data && e.data.type === 'NEW_VERSION') { window.location.reload(); }
-  //     });
-  //     reg.addEventListener('updatefound', () => {
-  //       const newWorker = reg.installing;
-  //       newWorker.addEventListener('statechange', () => {
-  //         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-  //           newWorker.postMessage('skipWaiting');
-  //         }
-  //       });
-  //     });
-  //   });
-  //   setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
-  // }
+  // === Service Worker ===
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      navigator.serviceWorker.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'NEW_VERSION') { window.location.reload(); }
+      });
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            newWorker.postMessage('skipWaiting');
+          }
+        });
+      });
+    });
+    setInterval(() => { navigator.serviceWorker.getRegistration().then(r => r && r.update()); }, 300000);
+  }
 
   // === Menu Toggle ===
   const menuBtn = document.getElementById('menuBtn');
