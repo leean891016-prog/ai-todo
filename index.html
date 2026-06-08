@@ -69,6 +69,11 @@ body {
   position: absolute; inset: 0;
   backface-visibility: hidden;
 }
+	.curl-shadow {
+	  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+	  pointer-events: none; z-index: 2; opacity: 0;
+	}
+	.curl-shadow.active { opacity: 1; }
 .view-page {
   position: relative;
   transform-origin: left center;
@@ -91,13 +96,15 @@ body {
   animation: pageOutBack 0.6s cubic-bezier(0.2, 0.0, 0.0, 1) forwards;
 }
 @keyframes pageOut {
-  0%   { transform: rotateY(0deg); opacity: 1; }
-  100% { transform: rotateY(-85deg); opacity: 0.3; }
-}
+	  0%   { transform: rotateY(0deg) scaleX(1); opacity: 1; }
+	  50%  { opacity: 0.6; }
+	  100% { transform: rotateY(-85deg) scaleX(0.9); opacity: 0.25; }
+	}
 @keyframes pageOutBack {
-  0%   { transform: rotateY(0deg); opacity: 1; }
-  100% { transform: rotateY(85deg); opacity: 0.3; }
-}
+	  0%   { transform: rotateY(0deg) scaleX(1); opacity: 1; }
+	  50%  { opacity: 0.6; }
+	  100% { transform: rotateY(85deg) scaleX(0.9); opacity: 0.25; }
+	}
 
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; padding-bottom: 16px; border-bottom: var(--bw) solid var(--line); }
 .header-left { display: flex; flex-direction: column; }
@@ -464,7 +471,7 @@ body.no-scroll { overflow: hidden; }
     <button class="menu-btn" id="menuBtn">···</button>
   </div>
 
-  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="view-page" id="viewContent"></div></div>
+  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="view-page" id="viewContent"></div><div class="curl-shadow" id="curlShadow"></div></div>
 
 </div>
 
@@ -515,6 +522,6 @@ body.no-scroll { overflow: hidden; }
 </div>
 
 
-<script src="app.js?v=36"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>

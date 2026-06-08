@@ -504,6 +504,8 @@ let showReport = false;
 function switchTab(tab) {
   if (tab === currentTab) return;
   const view = document.getElementById('viewContent');
+  const back = document.getElementById('viewBack');
+  const shadow = document.getElementById('curlShadow');
   if (!view || isAnimating) { currentTab = tab; render(); return; }
   isAnimating = true;
 
@@ -511,10 +513,35 @@ function switchTab(tab) {
   const forward = tabs.indexOf(tab) > tabs.indexOf(currentTab);
   const outClass = forward ? 'turning-out' : 'turning-out-back';
 
+  // Pre-render target page into back layer so it shows through the curling page
+  var savedHTML = view.innerHTML;
+  var savedTab = currentTab;
+  var savedProjId = currentProjectId;
+  var savedTitle = document.getElementById('headerTitle').textContent;
+  var savedBackBtn = document.getElementById('backBtn').style.display;
+  currentTab = tab;
+  currentProjectId = null;
+  render();
+  back.innerHTML = document.getElementById('viewContent').innerHTML;
+  view.innerHTML = savedHTML;
+  currentTab = savedTab;
+  currentProjectId = savedProjId;
+  document.getElementById('headerTitle').textContent = savedTitle;
+  document.getElementById('backBtn').style.display = savedBackBtn;
+
+  // Animate fold shadow
+  if (shadow) {
+    shadow.style.background = forward
+      ? 'linear-gradient(to left, rgba(0,0,0,0.12), transparent 50%)'
+      : 'linear-gradient(to right, rgba(0,0,0,0.12), transparent 50%)';
+    shadow.classList.add('active');
+  }
+
   view.classList.add(outClass);
   view.addEventListener('animationend', function handler() {
     view.removeEventListener('animationend', handler);
     view.classList.remove(outClass);
+    if (shadow) shadow.classList.remove('active');
 
     currentTab = tab;
     currentProjectId = null;
@@ -523,7 +550,6 @@ function switchTab(tab) {
     isAnimating = false;
   });
 }
-
 let isAnimating = false;
 
 // ========== Todo CRUD ==========
@@ -1393,6 +1419,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     var view = document.getElementById('viewContent');
     var back = document.getElementById('viewBack');
+    var shadowEl = document.getElementById('curlShadow');
     var app = document.querySelector('.app');
     if (!app || !view) return;
 
@@ -1406,8 +1433,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       view.classList.remove('dragging', 'spring-back');
       view.style.transform = '';
       view.style.transformOrigin = '';
-      view.style.opacity = '';
-      back.innerHTML = '';
+	      view.style.opacity = '';
+	      back.innerHTML = '';
+	      if (shadowEl) { shadowEl.style.opacity = ''; shadowEl.style.background = ''; }
     }
 
     // Pre-render target tab content into back layer (the "next page" underneath)
@@ -1468,8 +1496,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (direction === 'forward') angle = Math.min(0, angle);
       else angle = Math.max(0, angle);
 
-      view.style.transform = 'rotateY(' + angle + 'deg)';
-      view.style.opacity = 1 - Math.abs(angle) / 130;
+      var absAngle = Math.abs(angle);
+	      view.style.transform = 'rotateY(' + angle + 'deg) scaleX(' + (1 - absAngle * 0.001) + ')';
+	      view.style.opacity = 1 - absAngle / 130;
+	      if (shadowEl && back.innerHTML) {
+	        shadowEl.style.opacity = absAngle / 88;
+	        shadowEl.style.background = direction === 'forward'
+	          ? 'linear-gradient(to left, rgba(0,0,0,0.12), transparent 50%)'
+	          : 'linear-gradient(to right, rgba(0,0,0,0.12), transparent 50%)';
+	      }
     }, { passive: false });
 
     app.addEventListener('touchend', function(e) {
@@ -1486,8 +1521,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (pct > COMPLETE_PCT) {
         settling = true;
         var target = direction === 'forward' ? -88 : 88;
-        view.style.transform = 'rotateY(' + target + 'deg)';
-        view.style.opacity = '0.3';
+        view.style.transform = 'rotateY(' + target + 'deg) scaleX(0.9)';
+	        view.style.opacity = '0.25';
 
         view.addEventListener('transitionend', function finish(e) {
           if (e.propertyName !== 'transform') return;
@@ -1504,7 +1539,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       } else {
         settling = true;
         view.classList.add('spring-back');
-        view.style.transform = 'rotateY(0deg)';
+        view.style.transform = 'rotateY(0deg) scaleX(1)';
         view.style.opacity = '1';
 
         view.addEventListener('transitionend', function bounce(e) {
