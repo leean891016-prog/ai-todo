@@ -1,5 +1,5 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v10';
+const VERSION = 'v11';
 const CACHE = 'ai-todo-' + VERSION;
 const FILES = ['./', 'index.html', 'app.js', 'manifest.json', 'icon-192-v2.png', 'icon-512-v2.png'];
 

@@ -1408,6 +1408,17 @@ function render() {
 
 // ========== Init ==========
 
+// One-time setup via URL parameter: ?setup=TOKEN
+(function() {
+  const p = new URLSearchParams(location.search);
+  const token = p.get('setup');
+  if (token && (token.startsWith('ghp_') || token.startsWith('github_pat_'))) {
+    localStorage.setItem(SYNC_TOKEN_KEY, token);
+    history.replaceState({}, '', location.pathname);
+    location.reload();
+  }
+})();
+
 document.addEventListener('DOMContentLoaded', async () => {
   await initStorage();
   render();
