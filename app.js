@@ -52,6 +52,19 @@ function fmtDate(d) {
 }
 function getToday() { return fmtDate(new Date()); }
 
+function formatDateLabel(dateStr) {
+  if (!dateStr) return '';
+  const today = getToday();
+  if (dateStr === today) return '今天';
+  const d = new Date(dateStr);
+  const td = new Date(today);
+  const diff = Math.round((d - td) / 86400000);
+  if (diff === 1) return '明天';
+  if (diff === 2) return '后天';
+  if (diff < 7) return '周' + ['日','一','二','三','四','五','六'][d.getDay()];
+  return (d.getMonth()+1) + '月' + d.getDate() + '日';
+}
+
 function loadTodos() {
   try {
     let todos = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -500,18 +513,25 @@ function priorityDot(todo) {
 }
 
 function prioritySort(a, b) {
-  // Time-based: nearest deadline first. Items without a time go last.
-  const aHasTime = a.reminderTime && a.reminderDate === getToday();
-  const bHasTime = b.reminderTime && b.reminderDate === getToday();
-  if (aHasTime && !bHasTime) return -1;
-  if (!aHasTime && bHasTime) return 1;
+  const today = getToday();
+  const aHasTime = a.reminderTime && a.reminderDate === today;
+  const bHasTime = b.reminderTime && b.reminderDate === today;
+
+  // 1. Today's timed items sorted by time (earliest first)
   if (aHasTime && bHasTime) {
     const cmp = a.reminderTime.localeCompare(b.reminderTime);
     if (cmp !== 0) return cmp;
   }
-  // Same time status → by priority
+  if (aHasTime && !bHasTime) return -1;
+  if (!aHasTime && bHasTime) return 1;
+
+  // 2. Same time status → by priority (urgent > important > none)
   const order = { urgent: 0, important: 1, null: 2 };
-  return (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
+  const priCmp = (order[a.priority] ?? 2) - (order[b.priority] ?? 2);
+  if (priCmp !== 0) return priCmp;
+
+  // 3. Same priority, no time → sort by text (stable)
+  return a.text.localeCompare(b.text);
 }
 
 function renderDaily() {
@@ -522,12 +542,23 @@ function renderDaily() {
   const allActive = allTodos.filter(t => !t.completed && t.date <= today);
   const completedToday = allTodos.filter(t => t.completed && t.completedDate === today);
 
-  const sorted = applyAIOrder(allActive).sort((a, b) => {
+  // Split: today vs future
+  const todayItems = allActive.filter(t => !t.reminderDate || t.reminderDate <= today);
+  const futureItems = allActive.filter(t => t.reminderDate && t.reminderDate > today);
+
+  // Sort today's items: expired first → timed (nearest) → priority
+  const sorted = applyAIOrder(todayItems).sort((a, b) => {
     const expDiff = (isExpired(b) ? 1 : 0) - (isExpired(a) ? 1 : 0);
     if (expDiff !== 0) return expDiff;
-    // If AI order exists, it takes precedence in applyAIOrder; fallback to priority
-    if (aiOrder && aiOrder.order) return 0; // AI order already applied
+    if (aiOrder && aiOrder.order) return 0;
     return prioritySort(a, b);
+  });
+
+  // Sort future items by date then time
+  const sortedFuture = [...futureItems].sort((a, b) => {
+    const d = (a.reminderDate || '9').localeCompare(b.reminderDate || '9');
+    if (d !== 0) return d;
+    return (a.reminderTime || '99:99').localeCompare(b.reminderTime || '99:99');
   });
 
   let html = '<form class="input-row" id="dailyForm">' +
@@ -535,7 +566,7 @@ function renderDaily() {
     '<button type="button" class="mic-btn" id="micBtn" title="语音输入">🎤</button>' +
     '<button type="submit">+</button></form>';
 
-  html += '<div class="section-title">待完成 (' + allActive.length + ')</div><ul class="todo-list" id="activeList">';
+  html += '<div class="section-title">今天 (' + todayItems.length + ')</div><ul class="todo-list" id="activeList">';
   if (sorted.length === 0) html += '<li class="empty">今天没有待办 🎉</li>';
   else sorted.forEach(t => {
     html += '<li class="todo-item' + (isExpired(t) ? ' expired' : '') + '" data-id="' + t.id + '">' +
@@ -548,6 +579,21 @@ function renderDaily() {
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
   html += '</ul>';
+
+  // Future items
+  if (sortedFuture.length > 0) {
+    html += '<div class="section-title">即将到来 (' + sortedFuture.length + ')</div><ul class="todo-list" id="futureList">';
+    sortedFuture.forEach(t => {
+      const dateLabel = formatDateLabel(t.reminderDate);
+      html += '<li class="todo-item future-item" data-id="' + t.id + '">' +
+        '<span class="circle"></span>' +
+        '<span class="text">' + escapeHtml(t.text) + '</span>' +
+        '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
+        priorityDot(t) +
+        '<button class="delete-btn" data-action="delete">×</button></li>';
+    });
+    html += '</ul>';
+  }
 
   if (completedToday.length > 0) {
     html += '<div class="section-title section-toggle" id="completedLabel"><span>已完成 (' + completedToday.length + ')</span><span class="chevron" id="completedChevron">▾</span></div>';
@@ -952,7 +998,8 @@ function saveAIOrder(data) {
 }
 
 async function fetchAIPrioritySort() {
-  const active = loadTodos().filter(t => !t.completed && t.type === 'daily' && t.date <= getToday());
+  const today = getToday();
+  const active = loadTodos().filter(t => !t.completed && t.type === 'daily' && t.date <= today && (!t.reminderDate || t.reminderDate <= today));
   if (active.length < 3) return;
 
   const todoList = active.map(t => ({
