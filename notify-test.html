@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通知测试</title>
+<style>
+  body { font-family: -apple-system, sans-serif; padding: 40px 24px; background: #F5F0E8; color: #3C3835; }
+  h2 { font-size: 18px; margin-bottom: 20px; }
+  .item { margin-bottom: 12px; padding: 12px; background: #fff; border-radius: 8px; font-size: 14px; }
+  .ok { color: #7A9A7E; } .fail { color: #e74c3c; }
+  button { margin-top: 20px; padding: 14px 28px; font-size: 16px; background: #8B7355; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+  #result { margin-top: 16px; font-size: 14px; }
+</style>
+</head>
+<body>
+<h2>📱 通知 API 诊断</h2>
+<div id="tests"></div>
+<button id="testBtn">🔔 请求通知权限</button>
+<div id="result"></div>
+<script>
+const tests = document.getElementById('tests');
+function add(name, ok, detail) {
+  tests.innerHTML += '<div class="item"><span class="' + (ok ? 'ok' : 'fail') + '">' + (ok ? '✅' : '❌') + '</span> ' + name + (detail ? ': ' + detail : '') + '</div>';
+}
+
+// Run diagnostics immediately
+add('navigator.userAgent', true, navigator.userAgent.substring(0, 60) + '...');
+add('typeof Notification', typeof Notification !== 'undefined', typeof Notification);
+add("'Notification' in window", 'Notification' in window, 'Notification' in window);
+add('typeof window.Notification', typeof window.Notification, typeof window.Notification);
+
+if (typeof Notification !== 'undefined') {
+  add('Notification.permission', true, Notification.permission);
+  add('navigator.serviceWorker', 'serviceWorker' in navigator, '');
+  add('window.PushManager', 'PushManager' in window, '');
+} else {
+  add('Notification 不可用', false, '浏览器不支持或版本过低');
+}
+
+document.getElementById('testBtn').addEventListener('click', async () => {
+  const r = document.getElementById('result');
+  if (typeof Notification === 'undefined') {
+    r.textContent = '❌ Notification API 不存在，无法请求权限';
+    return;
+  }
+  r.textContent = '当前权限: ' + Notification.permission;
+  if (Notification.permission === 'default') {
+    r.textContent = '⏳ 请求权限中...';
+    const perm = await Notification.requestPermission();
+    r.textContent = '结果: ' + perm + ' | 当前权限: ' + Notification.permission;
+    if (perm === 'granted') {
+      new Notification('✅ 测试通知', { body: '如果你看到这条消息，说明通知功能正常！' });
+      r.textContent += ' | 已发送测试通知';
+    }
+  }
+});
+</script>
+</body>
+</html>
