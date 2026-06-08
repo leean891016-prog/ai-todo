@@ -279,10 +279,10 @@ async function syncFromGitHub() {
     const remote = await fetchRemoteData();
     if (!remote || !remote.todos) return;
 
+    // Merge: remote always wins for same-ID items, local-only items are kept
     const mergedTodos = mergeByUpdatedAt(_todosCache, remote.todos);
     const mergedProjects = mergeByUpdatedAt(_projectsCache, remote.projects || []);
 
-    // Check if anything changed
     const changed = mergedTodos.length !== _todosCache.length ||
       mergedProjects.length !== _projectsCache.length ||
       JSON.stringify(mergedTodos) !== JSON.stringify(_todosCache) ||
@@ -298,10 +298,30 @@ async function syncFromGitHub() {
       showBanner('已从云端同步 ' + mergedTodos.length + ' 条记录');
     }
 
-    // Also push local changes that remote didn't have
+    // Push merged result back to ensure consistency
     scheduleSyncToGitHub();
   } catch (e) {
     console.warn('Sync pull failed:', e.message);
+  }
+}
+
+// Force pull: completely replace local data with remote (for recovery)
+async function forcePullFromGitHub() {
+  if (!getSyncToken()) return false;
+  try {
+    const remote = await fetchRemoteData();
+    if (!remote || !remote.todos) return false;
+    _todosCache = remote.todos;
+    _projectsCache = remote.projects || [];
+    syncToLocalStorage();
+    _saveTodosToDB(_todosCache);
+    _saveProjectsToDB(_projectsCache);
+    render();
+    showBanner('已从云端恢复 ' + _todosCache.length + ' 条记录');
+    return true;
+  } catch (e) {
+    console.warn('Force pull failed:', e.message);
+    return false;
   }
 }
 
@@ -1610,8 +1630,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     syncTokenInput.value = getSyncToken();
     syncHint.textContent = '';
     syncHint.className = 'sync-hint';
+    document.getElementById('syncResetArea').style.display = getSyncToken() ? '' : 'none';
     syncOverlay.classList.add('show');
     setTimeout(() => syncTokenInput.focus(), 200);
+  });
+
+  document.getElementById('syncResetBtn').addEventListener('click', async () => {
+    syncHint.textContent = '正在从云端恢复...';
+    syncHint.className = 'sync-hint';
+    const ok = await forcePullFromGitHub();
+    if (ok) {
+      syncHint.textContent = '✓ 已从云端恢复';
+      syncHint.className = 'sync-hint';
+    } else {
+      syncHint.textContent = '⚠ 云端暂无数据，请先在已同步的设备上添加待办';
+      syncHint.className = 'sync-hint error';
+    }
   });
 
   document.getElementById('syncCancelBtn').addEventListener('click', () => {

@@ -450,6 +450,12 @@ body {
   border-radius: var(--radius); background: var(--bg); color: var(--text-dim);
   font-size: 14px; cursor: pointer;
 }
+.sync-reset { margin-top: 20px; padding-top: 16px; border-top: var(--bw) solid var(--line); }
+.sync-reset-btn {
+  width: 100%; padding: 10px; border: 1px dashed var(--warn);
+  border-radius: var(--radius); background: var(--bg); color: var(--warn);
+  font-size: 14px; cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -526,9 +532,13 @@ body {
       <button class="sync-save-btn" id="syncSaveBtn">保存并同步</button>
       <button class="sync-cancel-btn" id="syncCancelBtn">取消</button>
     </div>
+    <div class="sync-reset" id="syncResetArea" style="display:none;">
+      <div style="font-size:11px;color:var(--warn);margin-bottom:8px;">⚠ 数据出现异常？用云端数据覆盖本地</div>
+      <button class="sync-reset-btn" id="syncResetBtn">☁️ 从云端恢复</button>
+    </div>
   </div>
 </div>
 
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>
