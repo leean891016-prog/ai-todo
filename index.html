@@ -69,71 +69,34 @@ body {
   position: absolute; inset: 0;
   backface-visibility: hidden;
 }
-/* Shadow cast by the turning page onto the underlying page */
-.view-page-back::after {
-  content: ''; position: absolute; inset: 0; pointer-events: none;
-  opacity: var(--back-shadow, 0);
-  transition: opacity 0.15s;
-}
-.view-page-back.shadow-right::after {
-  background: linear-gradient(to right, transparent 60%, rgba(0,0,0,0.2) 100%);
-}
-.view-page-back.shadow-left::after {
-  background: linear-gradient(to left, transparent 60%, rgba(0,0,0,0.2) 100%);
-}
-
-/* Fold crease shadow — creates the illusion of a bending page */
-.fold-shadow {
-  position: absolute; top: 0; bottom: 0; z-index: 2;
-  width: 50px; pointer-events: none;
-  opacity: 0; transition: opacity 0.1s;
-}
-.fold-shadow.forward {
-  left: -2px;
-  background: linear-gradient(to right, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.08) 50%, transparent 100%);
-}
-.fold-shadow.backward {
-  right: -2px;
-  background: linear-gradient(to left, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.08) 50%, transparent 100%);
-}
-
 .view-page {
   position: relative;
+  transform-origin: left center;
   backface-visibility: hidden;
-  transition: transform 0.6s cubic-bezier(0.15, 0.0, 0.0, 1),
-              filter 0.6s cubic-bezier(0.15, 0.0, 0.0, 1);
+  transition: transform 0.6s cubic-bezier(0.2, 0.0, 0.0, 1);
+  box-shadow: 2px 0 12px rgba(0,0,0,0.08);
 }
 .view-page.dragging {
   transition: none !important;
 }
 .view-page.spring-back {
-  transition: transform 0.35s cubic-bezier(0.25, 0.0, 0.0, 1),
-              filter 0.35s cubic-bezier(0.25, 0.0, 0.0, 1);
-}
-.view-page::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(to right, rgba(0,0,0,0) 85%, rgba(0,0,0,0.12) 100%);
-  opacity: var(--shadow-opacity, 0); pointer-events: none;
-}
-.view-page.turning-out::after,
-.view-page.turning-out-back::after {
-  --shadow-opacity: 1;
+  transition: transform 0.35s cubic-bezier(0.25, 0.0, 0.0, 1);
 }
 .view-page.turning-out {
   transform-origin: left center;
-  animation: pageOut 0.65s cubic-bezier(0.1, 0.0, 0.0, 1) forwards;
+  animation: pageOut 0.6s cubic-bezier(0.2, 0.0, 0.0, 1) forwards;
 }
 .view-page.turning-out-back {
   transform-origin: right center;
-  animation: pageOutBack 0.65s cubic-bezier(0.1, 0.0, 0.0, 1) forwards;
+  animation: pageOutBack 0.6s cubic-bezier(0.2, 0.0, 0.0, 1) forwards;
 }
 @keyframes pageOut {
-  0%   { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
-  100% { transform: rotateY(-85deg); opacity: 0; filter: brightness(0.55); }
+  0%   { transform: rotateY(0deg); opacity: 1; }
+  100% { transform: rotateY(-85deg); opacity: 0.3; }
 }
 @keyframes pageOutBack {
-  0%   { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
-  100% { transform: rotateY(85deg); opacity: 0; filter: brightness(0.55); }
+  0%   { transform: rotateY(0deg); opacity: 1; }
+  100% { transform: rotateY(85deg); opacity: 0.3; }
 }
 
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; padding-bottom: 16px; border-bottom: var(--bw) solid var(--line); }
@@ -237,13 +200,7 @@ body {
 .banner.show { transform: translateY(0); }
 .banner .banner-text { flex: 1; }
 
-/* Badge */
-.badge {
-  position: fixed; bottom: 100px; right: 24px; z-index: 900;
-  font-size: 12px; font-weight: 300; color: var(--warn);
-  display: none; letter-spacing: 1px;
-}
-.badge.show { display: block; }
+/* Badge (replaced by inline indicator) */
 
 /* Tab Bar */
 .tab-bar {
@@ -361,24 +318,6 @@ body {
 .report-item .text { font-size: 14px; font-weight: 300; text-decoration: line-through; color: var(--text-dim); }
 .report-item .meta { font-size: 10px; color: var(--text-dim); margin-top: 4px; font-weight: 300; }
 
-/* Mini music player */
-.music-player {
-  position: fixed; bottom: 68px; left: 50%; transform: translateX(-50%);
-  z-index: 700; background: var(--paper);
-  padding: 10px 20px;
-  display: none; align-items: center; gap: 10px;
-  font-size: 12px; border-radius: 20px;
-  box-shadow: 0 1px 8px rgba(60,56,53,0.06);
-}
-.music-player.show { display: flex; }
-.music-player .music-title { font-size: 11px; color: var(--text-mid); max-width: 140px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-weight: 300; letter-spacing: 0.5px; }
-.music-player button {
-  width: 28px; height: 28px; border: none; background: none;
-  font-size: 12px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--text-dim);
-}
-.music-player button:active { color: var(--accent); }
 
 /* Procrastination popup */
 .procrastinate-popup {
@@ -469,48 +408,6 @@ body {
 }
 body.no-scroll { overflow: hidden; }
 
-
-/* Sync settings */
-.sync-overlay {
-  position: fixed; inset: 0; z-index: 2100; background: rgba(0,0,0,0.2);
-  display: none; align-items: center; justify-content: center;
-}
-.sync-overlay.show { display: flex; }
-.sync-panel {
-  width: calc(100% - 48px); max-width: 340px;
-  background: var(--paper); border-radius: var(--radius);
-  padding: 24px 20px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-  animation: fadeIn 0.25s ease;
-}
-.sync-panel h3 { font-size: 18px; font-weight: var(--fw-title); margin-bottom: 8px; letter-spacing: var(--ls-title); }
-.sync-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; line-height: 1.5; }
-.sync-label { font-size: 13px; font-weight: var(--fw-body); display: block; margin-bottom: 6px; }
-.sync-input {
-  width: 100%; padding: 10px 12px; border: var(--bw) solid var(--line);
-  border-radius: var(--radius); font-size: 13px; font-family: monospace;
-  background: var(--bg); color: var(--text); box-sizing: border-box;
-}
-.sync-input:focus { outline: none; border-color: var(--accent); }
-.sync-hint { font-size: 11px; color: var(--green); margin-top: 6px; min-height: 18px; }
-.sync-hint.error { color: var(--warn); }
-.sync-buttons { display: flex; gap: 8px; margin-top: 16px; }
-.sync-save-btn {
-  flex: 1; padding: 10px; border: none; border-radius: var(--radius);
-  background: var(--accent); color: #fff; font-size: 14px; cursor: pointer;
-}
-.sync-cancel-btn {
-  padding: 10px 16px; border: var(--bw) solid var(--line);
-  border-radius: var(--radius); background: var(--bg); color: var(--text-dim);
-  font-size: 14px; cursor: pointer;
-}
-.sync-reset { margin-top: 20px; padding-top: 16px; border-top: var(--bw) solid var(--line); }
-.sync-reset-btn {
-  width: 100%; padding: 10px; border: 1px dashed var(--warn);
-  border-radius: var(--radius); background: var(--bg); color: var(--warn);
-  font-size: 14px; cursor: pointer;
-}
-
 /* Priority menu */
 .priority-menu-overlay {
   position: fixed; inset: 0; z-index: 2200; background: rgba(0,0,0,0.3);
@@ -556,13 +453,6 @@ body.no-scroll { overflow: hidden; }
 </head>
 <body>
 <div class="banner" id="banner"><span class="banner-text" id="bannerText"></span></div>
-<div class="badge" id="badge">0</div>
-<div class="music-player" id="musicPlayer">
-  <span class="music-title" id="musicTitle">🎵 晨间轻音乐</span>
-  <button id="musicPlayBtn">▶️</button>
-  <button id="musicSkipBtn">⏭</button>
-  <button id="musicCloseBtn">✕</button>
-</div>
 
 <div class="app">
   <div class="header" id="headerArea">
@@ -574,18 +464,13 @@ body.no-scroll { overflow: hidden; }
     <button class="menu-btn" id="menuBtn">···</button>
   </div>
 
-  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="fold-shadow" id="foldShadow"></div><div class="view-page" id="viewContent"></div></div>
+  <div class="view-perspective"><div class="view-page-back" id="viewBack"></div><div class="view-page" id="viewContent"></div></div>
 
-  <div id="aiSuggestion" style="display:none;font-size:12px;color:var(--text-dim);text-align:left;padding:10px 0;line-height:1.5;font-style:italic;letter-spacing:0.5px;"></div>
 </div>
 
 <div class="menu-dropdown" id="menuDropdown">
-  <button id="aiSortBtn">🔀 AI 排序</button>
-  <button id="musicToggle">🎵 早晚音乐</button>
   <button id="themeBtn">🎨 主题</button>
   <button id="fontBtn">🔤 字体</button>
-  <button id="notifBtn">🔔 提醒</button>
-  <button id="syncBtn">☁️ 同步</button>
 </div>
 
 <nav class="tab-bar">
@@ -629,24 +514,7 @@ body.no-scroll { overflow: hidden; }
   </div>
 </div>
 
-<div class="sync-overlay" id="syncOverlay">
-  <div class="sync-panel">
-    <h3>☁️ 跨设备同步</h3>
-    <div class="sync-sub">在手机和电脑输入同一个 Token，数据自动同步</div>
-    <label class="sync-label" for="syncTokenInput">GitHub Token</label>
-    <input type="password" id="syncTokenInput" class="sync-input" placeholder="ghp_..." autocomplete="off">
-    <div class="sync-hint" id="syncHint"></div>
-    <div class="sync-buttons">
-      <button class="sync-save-btn" id="syncSaveBtn">保存并同步</button>
-      <button class="sync-cancel-btn" id="syncCancelBtn">取消</button>
-    </div>
-    <div class="sync-reset" id="syncResetArea" style="display:none;">
-      <div style="font-size:11px;color:var(--warn);margin-bottom:8px;">⚠ 数据出现异常？用云端数据覆盖本地</div>
-      <button class="sync-reset-btn" id="syncResetBtn">☁️ 从云端恢复</button>
-    </div>
-  </div>
-</div>
 
-<script src="app.js?v=34"></script>
+<script src="app.js?v=35"></script>
 </body>
 </html>

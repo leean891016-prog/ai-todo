@@ -1,8 +1,6 @@
 // v2
 // ========== Config ==========
 
-const DEEPSEEK_KEY = 'sk-adfe808bbd3c4932938a0689a60a5be9';
-
 // ========== Time Parser ==========
 
 const CN_MAP = { '零':0, '一':1, '二':2, '两':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10 };
@@ -399,13 +397,6 @@ function isExpired(todo) {
   return now.getHours() * 60 + now.getMinutes() >= h * 60 + m + 5;
 }
 
-function updateBadge(todos) {
-  const badge = document.getElementById('badge');
-  const expired = todos.filter(t => isExpired(t)).length;
-  if (expired > 0) { badge.textContent = expired; badge.classList.add('show'); }
-  else { badge.classList.remove('show'); }
-}
-
 function checkAndFireReminders(todos, wideWindow) {
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
@@ -441,8 +432,6 @@ function checkAndFireReminders(todos, wideWindow) {
         '共 ' + total + ' 条待完成：\n' + [...unset.map(t => '· ' + t.text), ...set.map(t => '· ' + t.text + '（' + t.reminderTime + '）')].join('\n'), false);
     }
 
-    // AI priority sort at 8 AM
-    if (!wideWindow) fetchAIPrioritySort();
   }
 
   checkReviewTime();
@@ -496,7 +485,6 @@ function applyReview() {
     }
   });
   saveTodos(todos); markReviewDone(); hideReviewPanel(); render();
-  checkMusicTrigger('evening');
 }
 
 function checkReviewTime() {
@@ -516,20 +504,9 @@ let showReport = false;
 function switchTab(tab) {
   if (tab === currentTab) return;
   const view = document.getElementById('viewContent');
-  const back = document.getElementById('viewBack');
   if (!view || isAnimating) { currentTab = tab; render(); return; }
   isAnimating = true;
 
-  // Pre-render target content into back layer (the "next page" underneath)
-  const savedHTML = view.innerHTML;
-  const savedTab = currentTab;
-  currentTab = tab;
-  render();
-  back.innerHTML = view.innerHTML.replace(/\s+id="[^"]*"/g, ''); // strip ids to avoid DOM conflicts
-  view.innerHTML = savedHTML;
-  currentTab = savedTab;
-
-  // Determine direction
   const tabs = ['inspiration', 'daily', 'projects'];
   const forward = tabs.indexOf(tab) > tabs.indexOf(currentTab);
   const outClass = forward ? 'turning-out' : 'turning-out-back';
@@ -538,7 +515,6 @@ function switchTab(tab) {
   view.addEventListener('animationend', function handler() {
     view.removeEventListener('animationend', handler);
     view.classList.remove(outClass);
-    back.innerHTML = '';
 
     currentTab = tab;
     currentProjectId = null;
@@ -562,8 +538,6 @@ function cyclePriority(id) {
   else if (todo.priority === 'urgent') todo.priority = 'both';
   else todo.priority = null;
   saveTodos(todos);
-  // User override clears AI order
-  if (aiOrder) { aiOrder = null; localStorage.removeItem(AI_ORDER_KEY); }
   render();
 }
 
@@ -601,21 +575,6 @@ function addTodo(text, type, projectId) {
     updatedAt: nowISO(),
   });
   saveTodos(todos); render();
-
-  // AI classification (async, non-blocking)
-  if (type === 'daily') {
-    const el = document.getElementById('aiSuggestion');
-    el.style.display = '';
-    el.style.color = 'var(--text-dim)';
-    el.textContent = '🤖 正在调用 AI 分类... → ' + getAPIBase();
-    classifyTodo(trimmed).then(result => {
-      if (result) showAISuggestion(null, result);
-      else { el.textContent = '🤖 AI 调用完成，无结果'; el.style.color = 'var(--danger)'; }
-    }).catch(e => {
-      el.textContent = '🤖 调用失败: ' + e.message;
-      el.style.color = 'var(--danger)';
-    });
-  }
 }
 
 function toggleTodo(id) {
@@ -845,11 +804,8 @@ function renderDaily() {
   const todayItems = allActive.filter(t => !t.reminderDate || t.reminderDate <= today);
   const futureItems = allActive.filter(t => t.reminderDate && t.reminderDate > today);
 
-  // Sort today's items by priority, then time (no expired-to-top)
-  const sorted = applyAIOrder(todayItems).sort((a, b) => {
-    if (aiOrder && aiOrder.order) return 0;
-    return prioritySort(a, b);
-  });
+  // Sort today's items by priority, then time
+  const sorted = [...todayItems].sort(prioritySort);
 
   // Sort future items by date, then priority, then time
   const sortedFuture = [...futureItems].sort((a, b) => {
@@ -908,7 +864,6 @@ function renderDaily() {
 
   document.getElementById('viewContent').innerHTML = html;
   bindListEvents();
-  updateBadge(allActive);
 
   // Report button
   const reportBtn = document.getElementById('openReportBtn');
@@ -1058,7 +1013,6 @@ function setPriorityFromMenu(pri) {
   todo.priority = pri === 'null' ? null : pri;
   todo.updatedAt = nowISO();
   saveTodos(todos);
-  if (aiOrder) { aiOrder = null; localStorage.removeItem(AI_ORDER_KEY); }
   hidePriorityMenu();
   render();
 }
@@ -1087,100 +1041,6 @@ function bindListEvents() {
       }
     });
   });
-}
-
-// ========== Music Player ==========
-
-const MUSIC_KEY = 'ai-todo-music-on';
-const FAVORITES_KEY = 'ai-todo-music-fav';
-let musicOn = localStorage.getItem(MUSIC_KEY) !== '0';
-let audioCtx = null;
-let musicPlaying = false;
-let currentMelodyIndex = 0;
-
-// Simple pentatonic melodies (note frequencies in Hz)
-const MELODIES = [
-  { name: '晨间鸟鸣', time: 'morning', notes: [
-    { f: 523, d: 0.3 }, { f: 659, d: 0.3 }, { f: 784, d: 0.4 }, { f: 1047, d: 0.3 },
-    { f: 784, d: 0.3 }, { f: 659, d: 0.3 }, { f: 523, d: 0.4 },
-    { f: 0, d: 0.2 }, { f: 659, d: 0.3 }, { f: 784, d: 0.3 }, { f: 880, d: 0.5 }, { f: 784, d: 0.3 },
-    { f: 659, d: 0.3 }, { f: 523, d: 0.4 },
-  ]},
-  { name: '午后花园', time: 'morning', notes: [
-    { f: 440, d: 0.4 }, { f: 554, d: 0.3 }, { f: 659, d: 0.5 }, { f: 554, d: 0.3 },
-    { f: 440, d: 0.4 }, { f: 0, d: 0.2 }, { f: 659, d: 0.3 }, { f: 784, d: 0.4 },
-    { f: 880, d: 0.5 }, { f: 784, d: 0.3 }, { f: 659, d: 0.4 },
-  ]},
-  { name: '星空漫步', time: 'evening', notes: [
-    { f: 392, d: 0.5 }, { f: 440, d: 0.3 }, { f: 523, d: 0.5 }, { f: 440, d: 0.3 },
-    { f: 0, d: 0.2 }, { f: 349, d: 0.4 }, { f: 440, d: 0.3 }, { f: 523, d: 0.5 },
-    { f: 587, d: 0.4 }, { f: 523, d: 0.3 }, { f: 440, d: 0.5 },
-  ]},
-  { name: '晚安曲', time: 'evening', notes: [
-    { f: 330, d: 0.6 }, { f: 392, d: 0.4 }, { f: 440, d: 0.6 },
-    { f: 0, d: 0.3 }, { f: 392, d: 0.4 }, { f: 330, d: 0.4 }, { f: 294, d: 0.6 },
-    { f: 330, d: 0.4 }, { f: 262, d: 0.8 },
-  ]},
-];
-
-function playMelody(melody) {
-  if (!musicOn) return;
-  stopMusic();
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  audioCtx = ctx;
-  musicPlaying = true;
-  currentMelodyIndex = MELODIES.indexOf(melody);
-
-  const gain = ctx.createGain();
-  gain.gain.value = 0.12; // low volume
-  gain.connect(ctx.destination);
-
-  let time = 0;
-  for (const note of melody.notes) {
-    if (note.f === 0) { time += note.d; continue; }
-    const osc = ctx.createOscillator();
-    const noteGain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.value = note.f;
-    noteGain.gain.setValueAtTime(0.08, ctx.currentTime + time);
-    noteGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + note.d - 0.05);
-    osc.connect(noteGain);
-    noteGain.connect(gain);
-    osc.start(ctx.currentTime + time);
-    osc.stop(ctx.currentTime + time + note.d);
-    time += note.d;
-  }
-
-  document.getElementById('musicTitle').textContent = '🎵 ' + melody.name;
-  document.getElementById('musicPlayer').classList.add('show');
-
-  // Auto-stop after melody ends
-  setTimeout(() => { musicPlaying = false; }, time * 1000 + 500);
-}
-
-function stopMusic() {
-  if (audioCtx) { audioCtx.close(); audioCtx = null; }
-  musicPlaying = false;
-}
-
-function showMusicPlayer(melody) {
-  if (!musicOn) return;
-  playMelody(melody);
-}
-
-function checkMusicTrigger(reason) {
-  if (!musicOn) return;
-  const today = getToday();
-  const dailyKey = 'music-triggered-' + reason + '-' + today;
-  if (localStorage.getItem(dailyKey)) return;
-  localStorage.setItem(dailyKey, '1');
-
-  const candidates = MELODIES.filter(m => reason === 'morning' ? m.time === 'morning' : m.time === 'evening');
-  // Prefer favorites
-  const favs = JSON.parse(localStorage.getItem(FAVORITES_KEY) || '[]');
-  const favMelody = candidates.find(m => favs.includes(m.name));
-  const melody = favMelody || candidates[Math.floor(Math.random() * candidates.length)];
-  showMusicPlayer(melody);
 }
 
 // ========== Voice Input ==========
@@ -1249,175 +1109,6 @@ function setupVoiceInput() {
     micBtn.textContent = '🎤';
     micBtn.classList.remove('recording');
   }
-}
-
-// ========== AI Classification ==========
-
-function getTrainingData() {
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const cutoff = fmtDate(thirtyDaysAgo);
-  return loadTodos()
-    .filter(t => t.date >= cutoff)
-    .map(t => ({ text: t.text, type: t.type, priority: t.priority || 'normal' }));
-}
-
-async function classifyTodo(text) {
-  const training = getTrainingData();
-  const historyText = training.length > 0
-    ? '\n用户过去30天的分类记录：\n' + JSON.stringify(training.slice(0, 50))
-    : '';
-
-  const systemPrompt =
-    '你是一个待办分类助手。根据用户过去的分类习惯，判断新待办应该归类到哪个层级和优先级。\n' +
-    '只返回JSON，不要其他内容：{"layer":"daily"|"inspiration"|"project","priority":"normal"|"important"|"urgent"|"both","reason":"一句话理由"}\n' +
-    '如果没把握，layer返回daily，priority返回normal。' + historyText;
-
-  try {
-    const resp = await fetch(getAPIBase(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DEEPSEEK_KEY },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: '分类这条待办：' + text },
-        ],
-        temperature: 0.3,
-        max_tokens: 150,
-      }),
-    });
-
-    if (!resp.ok) return null;
-    const raw = await resp.text();
-    let data;
-    try { data = JSON.parse(raw); } catch { return null; }
-    const content = data.choices?.[0]?.message?.content || '';
-    const clean = content.replace(/```json\s*|\s*```/g, '').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return null;
-    return JSON.parse(jsonMatch[0]);
-  } catch {
-    return null;
-  }
-}
-
-
-function getAPIBase() {
-  if (location.protocol === 'http:') {
-    return location.protocol + '//' + location.hostname + ':3001';
-  }
-  return 'https://api.deepseek.com/v1/chat/completions';
-}
-
-function showAISuggestion(todo, result) {
-  if (!result || !result.layer) return;
-  const layerLabel = result.layer === 'daily' ? '日常' : result.layer === 'inspiration' ? '灵感' : '项目';
-  const priMap = { both: '重要且紧急', urgent: '紧急', important: '重要' };
-  const priLabel = priMap[result.priority] || '普通';
-  const el = document.getElementById('aiSuggestion');
-  el.style.display = '';
-  el.textContent = '💡 AI 建议：归入「' + layerLabel + '」· ' + priLabel + (result.reason ? ' —— ' + result.reason : '');
-  setTimeout(() => { el.style.display = 'none'; }, 15000);
-}
-
-// ========== AI Priority Sort ==========
-
-let aiOrder = null; // {order: [id,...], reason: string}
-const AI_ORDER_KEY = 'ai-todo-order';
-
-function loadAIOrder() {
-  try {
-    const raw = localStorage.getItem(AI_ORDER_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw);
-    if (data.date === getToday()) return data;
-  } catch {}
-  return null;
-}
-
-function saveAIOrder(data) {
-  localStorage.setItem(AI_ORDER_KEY, JSON.stringify({ ...data, date: getToday() }));
-}
-
-async function fetchAIPrioritySort() {
-  const today = getToday();
-  const active = loadTodos().filter(t => !t.completed && t.type === 'daily' && t.date <= today && (!t.reminderDate || t.reminderDate <= today));
-  if (active.length < 3) return;
-
-  const todoList = active.map(t => ({
-    id: t.id,
-    text: t.text,
-    priority: t.priority || 'normal',
-    deadline: t.reminderTime || '无',
-    postponeCount: t.postponeCount || 0,
-  }));
-
-  const systemPrompt =
-    '你是待办优先级排序助手。根据待办的时间紧迫度和重要程度，给出今天的执行顺序建议。\n' +
-    '优先级排序：both(重要且紧急) > urgent(紧急) > important(重要) > normal(无) | 同优先级按时间，已延期3次以上的适度提前\n' +
-    '返回JSON，不要其他内容：{"order":["id1","id2",...],"reason":"一句话建议"}\n' +
-    '只排序，不增删。';
-
-  try {
-    const resp = await fetch(getAPIBase(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + DEEPSEEK_KEY },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: '今天的待办：\n' + JSON.stringify(todoList) },
-        ],
-        temperature: 0.3,
-        max_tokens: 500,
-      }),
-    });
-
-    if (!resp.ok) return;
-    const raw = await resp.text();
-    let data;
-    try { data = JSON.parse(raw); } catch { return; }
-    const content = data.choices?.[0]?.message?.content || '';
-    const clean = content.replace(/```json\s*|\s*```/g, '').trim();
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return;
-
-    const result = JSON.parse(jsonMatch[0]);
-    if (result.order) {
-      aiOrder = result;
-      saveAIOrder(result);
-      render();
-      showAISortHint(result);
-    }
-  } catch {}
-}
-
-function showAISortHint(result) {
-  const todos = loadTodos();
-  const names = (result.order || []).slice(0, 3)
-    .map(id => todos.find(t => t.id === id))
-    .filter(Boolean)
-    .map(t => t.text.slice(0, 10))
-    .join('、');
-  if (names) {
-    const el = document.getElementById('aiSuggestion');
-    el.textContent = '💡 AI建议：今天先处理 ' + names + (result.reason ? '（' + result.reason + '）' : '');
-    el.style.color = 'var(--accent)';
-    setTimeout(() => { el.textContent = ''; }, 8000);
-  }
-}
-
-function applyAIOrder(todos) {
-  if (!aiOrder || !aiOrder.order) return todos;
-  const orderMap = {};
-  aiOrder.order.forEach((id, i) => { orderMap[id] = i; });
-  return [...todos].sort((a, b) => {
-    const aIdx = orderMap[a.id] ?? 999;
-    const bIdx = orderMap[b.id] ?? 999;
-    if (aIdx !== bIdx) return aIdx - bIdx;
-    return prioritySort(a, b);
-  });
 }
 
 // ========== Completed Report ==========
@@ -1522,41 +1213,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentProjectId = null; render();
   });
 
-  // Music player controls
-  document.getElementById('musicPlayBtn').addEventListener('click', () => {
-    if (musicPlaying) { stopMusic(); document.getElementById('musicPlayBtn').textContent = '▶️'; }
-    else { playMelody(MELODIES[currentMelodyIndex] || MELODIES[0]); document.getElementById('musicPlayBtn').textContent = '⏸'; }
-  });
-  document.getElementById('musicSkipBtn').addEventListener('click', () => {
-    const pool = MELODIES.filter(m => {
-      const isMorning = new Date().getHours() >= 8 && new Date().getHours() < 10;
-      return isMorning ? m.time === 'morning' : m.time === 'evening';
-    });
-    const next = pool[Math.floor(Math.random() * pool.length)];
-    playMelody(next);
-    document.getElementById('musicPlayBtn').textContent = '⏸';
-  });
-  document.getElementById('musicCloseBtn').addEventListener('click', () => {
-    stopMusic(); document.getElementById('musicPlayer').classList.remove('show');
-  });
-
-  // Music toggle
-  document.getElementById('musicToggle').addEventListener('click', function() {
-    musicOn = !musicOn;
-    localStorage.setItem(MUSIC_KEY, musicOn ? '1' : '0');
-    this.textContent = musicOn ? '🎵 早晚音乐' : '🔇 音乐已关';
-    this.style.color = musicOn ? '' : 'var(--danger)';
-    if (!musicOn) stopMusic();
-  });
-  if (!musicOn) {
-    const btn = document.getElementById('musicToggle');
-    btn.textContent = '🔇 音乐已关';
-    btn.style.color = 'var(--danger)';
-  }
-
-  // Morning music trigger on first open each day
-  checkMusicTrigger('morning');
-
   // Date tap 3x for review panel test
   let dateTapCount = 0;
   document.getElementById('dateDisplay').addEventListener('click', () => {
@@ -1571,17 +1227,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === e.currentTarget) hideReviewPanel();
   });
 
-
-  // API Key toggle
-
-  aiSortBtn.addEventListener('click', () => {
-    aiSortBtn.textContent = '🔀 排序中...';
-    aiSortBtn.disabled = true;
-    fetchAIPrioritySort().finally(() => {
-      aiSortBtn.textContent = '🔀 AI排序';
-      aiSortBtn.disabled = false;
-    });
-  });
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').then(reg => {
@@ -1613,31 +1258,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!menuDropdown.contains(e.target) && e.target !== menuBtn) menuDropdown.classList.remove('show');
   });
   menuDropdown.addEventListener('click', () => menuDropdown.classList.remove('show'));
-
-  // === Notification ===
-  const notifBtn = document.getElementById('notifBtn');
-  if (!('Notification' in window)) {
-    notifBtn.textContent = '🚫 不支持通知';
-  } else {
-    function updateNotifBtn() {
-      if (Notification.permission === 'granted') notifBtn.textContent = '🔔 提醒（已开）';
-      else if (Notification.permission === 'default') notifBtn.textContent = '🔔 开启提醒';
-      else notifBtn.textContent = '🔕 提醒（已关）';
-    }
-    notifBtn.addEventListener('click', async () => {
-      if (Notification.permission === 'granted') return;
-      const result = await Notification.requestPermission();
-      updateNotifBtn();
-    });
-    updateNotifBtn();
-  }
-
-  // Load today's AI order
-  const savedOrder = loadAIOrder();
-  if (savedOrder) {
-    aiOrder = savedOrder;
-    showAISortHint(savedOrder);
-  }
 
   // === Theme Switcher ===
   const THEME_KEY = 'ai-todo-theme';
@@ -1740,81 +1360,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Apply saved font on load
   setFont(getFont());
 
-  // === Sync Settings ===
-  const syncOverlay = document.getElementById('syncOverlay');
-  const syncTokenInput = document.getElementById('syncTokenInput');
-  const syncHint = document.getElementById('syncHint');
-  const syncBtn = document.getElementById('syncBtn');
-
-  function updateSyncBtnLabel() {
-    if (getSyncToken()) syncBtn.textContent = '☁️ 同步（已设）';
-    else syncBtn.textContent = '☁️ 同步设置';
-  }
-  updateSyncBtnLabel();
-
-  syncBtn.addEventListener('click', () => {
-    syncTokenInput.value = getSyncToken();
-    syncHint.textContent = '';
-    syncHint.className = 'sync-hint';
-    document.getElementById('syncResetArea').style.display = getSyncToken() ? '' : 'none';
-    syncOverlay.classList.add('show');
-    setTimeout(() => syncTokenInput.focus(), 200);
-  });
-
-  document.getElementById('syncResetBtn').addEventListener('click', async () => {
-    syncHint.textContent = '正在从云端恢复...';
-    syncHint.className = 'sync-hint';
-    const ok = await forcePullFromGitHub();
-    if (ok) {
-      syncHint.textContent = '✓ 已从云端恢复';
-      syncHint.className = 'sync-hint';
-    } else {
-      syncHint.textContent = '⚠ 云端暂无数据，请先在已同步的设备上添加待办';
-      syncHint.className = 'sync-hint error';
-    }
-  });
-
-  document.getElementById('syncCancelBtn').addEventListener('click', () => {
-    syncOverlay.classList.remove('show');
-  });
-  syncOverlay.addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) syncOverlay.classList.remove('show');
-  });
-
-  document.getElementById('syncSaveBtn').addEventListener('click', async () => {
-    const token = syncTokenInput.value.trim();
-    if (!token) {
-      syncHint.textContent = '请输入 Token';
-      syncHint.className = 'sync-hint error';
-      return;
-    }
-    if (!token.startsWith('ghp_') && !token.startsWith('github_pat_')) {
-      syncHint.textContent = 'Token 格式不正确，应以 ghp_ 或 github_pat_ 开头';
-      syncHint.className = 'sync-hint error';
-      return;
-    }
-    syncHint.textContent = '正在验证...';
-    syncHint.className = 'sync-hint';
-    localStorage.setItem(SYNC_TOKEN_KEY, token);
-    updateSyncBtnLabel();
-
-    // Test the token by fetching
-    try {
-      const remote = await fetchRemoteData();
-      syncHint.textContent = remote ? '✓ 同步成功！已连接云端' : '✓ Token 已保存，首次同步将创建云端数据';
-      syncHint.className = 'sync-hint';
-      if (remote && remote.todos) {
-        syncFromGitHub();
-      } else {
-        // Push local data to create the file
-        await pushRemoteData(_todosCache, _projectsCache);
-      }
-    } catch (e) {
-      syncHint.textContent = '⚠️ 连接失败：' + e.message + '，Token 已保存';
-      syncHint.className = 'sync-hint error';
-    }
-  });
-
   // Apply saved theme on load
   setTheme(getTheme());
 
@@ -1827,45 +1372,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
-  // === Swipe navigation (interactive page-turn) ===
+  // === Swipe navigation (interactive page-turn with underlying page reveal) ===
   (function setupSwipe() {
     var tabs = ['inspiration', 'daily', 'projects'];
     var MAX_DRAG = 300;
-    var LOCK_THRESHOLD = 8;
-    var COMPLETE_THRESHOLD = 28;
+    var THRESHOLD = 10;
+    var COMPLETE_PCT = 0.35;
 
     var startX = 0, startY = 0;
-    var lastMoveX = 0, lastMoveTime = 0;
-    var isSwiping = false;
+    var swiping = false;
     var settling = false;
-    var swipeDir = null;
+    var direction = null;
     var targetTab = null;
     var preRendered = false;
 
     var view = document.getElementById('viewContent');
     var back = document.getElementById('viewBack');
-    var fold = document.getElementById('foldShadow');
     var app = document.querySelector('.app');
     if (!app || !view) return;
 
-    function fullCleanup() {
+    function cleanup() {
       settling = false;
-      isSwiping = false;
-      swipeDir = null;
+      swiping = false;
+      direction = null;
       targetTab = null;
       preRendered = false;
       view.style.transition = '';
       view.classList.remove('dragging', 'spring-back');
       view.style.transform = '';
-      view.style.filter = '';
       view.style.transformOrigin = '';
-      view.style.setProperty('--shadow-opacity', '0');
-      back.style.setProperty('--back-shadow', '0');
-      back.className = 'view-page-back';
+      view.style.opacity = '';
       back.innerHTML = '';
-      if (fold) { fold.className = 'fold-shadow'; fold.style.opacity = ''; }
     }
 
+    // Pre-render target tab content into back layer (the "next page" underneath)
+    // Called via setTimeout to avoid blocking the touchmove frame
     function preRenderTarget() {
       if (preRendered) return;
       preRendered = true;
@@ -1883,15 +1424,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     app.addEventListener('touchstart', function(e) {
-      if (settling) return;
+      if (settling || currentProjectId) return;
       startX = e.touches[0].clientX;
       startY = e.touches[0].clientY;
-      lastMoveX = startX;
-      lastMoveTime = Date.now();
-      isSwiping = false;
-      swipeDir = null;
+      swiping = false;
+      direction = null;
       targetTab = null;
       preRendered = false;
+      back.innerHTML = '';
     }, { passive: true });
 
     app.addEventListener('touchmove', function(e) {
@@ -1900,101 +1440,72 @@ document.addEventListener('DOMContentLoaded', async () => {
       var dx = e.changedTouches[0].clientX - startX;
       var dy = e.changedTouches[0].clientY - startY;
 
-      if (!isSwiping) {
-        if (Math.abs(dx) < LOCK_THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
-
+      if (!swiping) {
+        if (Math.abs(dx) < THRESHOLD || Math.abs(dx) < Math.abs(dy)) return;
         var idx = tabs.indexOf(currentTab);
         if (dx < 0 && idx < tabs.length - 1) {
-          swipeDir = 'forward';
+          direction = 'forward';
           targetTab = tabs[idx + 1];
         } else if (dx > 0 && idx > 0) {
-          swipeDir = 'backward';
+          direction = 'back';
           targetTab = tabs[idx - 1];
         } else { return; }
-
-        isSwiping = true;
+        swiping = true;
         view.classList.add('dragging');
-        // Set up shadow classes once
-        if (swipeDir === 'forward') {
-          if (fold) fold.className = 'fold-shadow forward';
-          back.className = 'view-page-back shadow-right';
-        } else {
-          if (fold) fold.className = 'fold-shadow backward';
-          back.className = 'view-page-back shadow-left';
-        }
+        view.style.transformOrigin = direction === 'forward' ? 'left center' : 'right center';
         // Defer heavy render so this frame stays smooth
         setTimeout(preRenderTarget, 0);
-        // Continue to apply drag this frame (no return!)
       }
 
       e.preventDefault();
-      lastMoveX = e.changedTouches[0].clientX;
-      lastMoveTime = Date.now();
 
-      var angle = (dx / MAX_DRAG) * 90;
-      if (swipeDir === 'forward') {
-        angle = Math.max(-90, Math.min(0, angle));
-        view.style.transformOrigin = 'left center';
-      } else {
-        angle = Math.max(0, Math.min(90, angle));
-        view.style.transformOrigin = 'right center';
-      }
+      var angle = Math.max(-88, Math.min(88, (dx / MAX_DRAG) * 90));
+      if (direction === 'forward') angle = Math.min(0, angle);
+      else angle = Math.max(0, angle);
 
-      var absAngle = Math.abs(angle);
       view.style.transform = 'rotateY(' + angle + 'deg)';
-      view.style.filter = 'brightness(' + (1 - absAngle / 180) + ')';
-      view.style.setProperty('--shadow-opacity', String(absAngle / 90));
-      back.style.setProperty('--back-shadow', String(absAngle / 90));
-      if (fold) fold.style.opacity = String(Math.min(1, absAngle / 25));
+      view.style.opacity = 1 - Math.abs(angle) / 130;
     }, { passive: false });
 
     app.addEventListener('touchend', function(e) {
-      if (!isSwiping || settling) { fullCleanup(); return; }
+      if (!swiping || settling) { cleanup(); return; }
 
       var dx = e.changedTouches[0].clientX - startX;
-      var dt = Math.max(1, Date.now() - lastMoveTime);
-      var velocity = (e.changedTouches[0].clientX - lastMoveX) / dt;
+      var angle = Math.max(-88, Math.min(88, (dx / MAX_DRAG) * 90));
+      if (direction === 'forward') angle = Math.min(0, angle);
+      else angle = Math.max(0, angle);
 
-      var angle = (dx / MAX_DRAG) * 90;
-      if (swipeDir === 'forward') angle = Math.max(-90, Math.min(0, angle));
-      else angle = Math.max(0, Math.min(90, angle));
-
-      var effectiveAngle = Math.abs(angle) + Math.abs(velocity) * 60;
+      var pct = Math.abs(angle) / 88;
       view.classList.remove('dragging');
 
-      if (effectiveAngle > COMPLETE_THRESHOLD) {
+      if (pct > COMPLETE_PCT) {
         settling = true;
-        var targetAngle = swipeDir === 'forward' ? -90 : 90;
-        view.style.transform = 'rotateY(' + targetAngle + 'deg)';
-        view.style.filter = 'brightness(0.5)';
-        view.style.setProperty('--shadow-opacity', '1');
-        back.style.setProperty('--back-shadow', '1');
+        var target = direction === 'forward' ? -88 : 88;
+        view.style.transform = 'rotateY(' + target + 'deg)';
+        view.style.opacity = '0.3';
 
         view.addEventListener('transitionend', function finish(e) {
           if (e.propertyName !== 'transform') return;
           view.removeEventListener('transitionend', finish);
-          // Instantly snap back (no transition) to avoid visual jump
           view.style.transition = 'none';
           view.style.transform = '';
-          view.style.filter = '';
+          view.style.opacity = '';
+          cleanup();
           currentTab = targetTab;
           currentProjectId = null;
           document.querySelectorAll('.tab-bar button').forEach(function(b) { b.classList.toggle('active', b.dataset.tab === targetTab); });
           render();
-          requestAnimationFrame(function() { fullCleanup(); });
         });
       } else {
         settling = true;
         view.classList.add('spring-back');
         view.style.transform = 'rotateY(0deg)';
-        view.style.filter = 'brightness(1)';
-        view.style.setProperty('--shadow-opacity', '0');
-        back.style.setProperty('--back-shadow', '0');
+        view.style.opacity = '1';
 
         view.addEventListener('transitionend', function bounce(e) {
           if (e.propertyName !== 'transform') return;
           view.removeEventListener('transitionend', bounce);
-          fullCleanup();
+          cleanup();
         });
       }
     });
