@@ -5,6 +5,15 @@
   d.id = 'pushDiagEarly';
   d.style.cssText = 'position:fixed;bottom:12px;left:12px;z-index:99999;background:#1a1a1a;color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;font-family:monospace;max-width:90vw;word-break:break-all';
   d.textContent = 'N=' + typeof window.Notification + ' SW=' + ('serviceWorker' in navigator) + ' PM=' + ('PushManager' in window) + ' p=' + (typeof window.Notification!=='undefined' ? window.Notification.permission : 'N/A');
+  // Update SW state every second
+  setInterval(function(){
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        var swState = regs.length === 0 ? 'none' : regs.map(function(r){ return (r.active?'A':(r.installing?'I':(r.waiting?'W':'?'))); }).join(',');
+        d.textContent = 'N=' + typeof window.Notification + ' SW=' + ('serviceWorker' in navigator) + ' PM=' + ('PushManager' in window) + ' p=' + (typeof window.Notification!=='undefined' ? window.Notification.permission : 'N/A') + ' swState=' + swState;
+      });
+    }
+  }, 1000);
   document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(d); });
 })();
 
@@ -1259,7 +1268,7 @@ async function subscribeToPush() {
 
     // [v57] 3. 全新注册 SW
     updatePushStatus('⏳ 注册新SW...', '#C4A86B');
-    const reg = await navigator.serviceWorker.register('sw.js');
+    const reg = await navigator.serviceWorker.register('sw.js?v=58');
 
     // [v57] 4. 用 statechange 事件等待激活（比轮询更可靠）
     if (!reg.active) {
@@ -1484,10 +1493,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // === Service Worker (minimal) ===
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-  }
+  // === Service Worker ===
+  // Registered in subscribeToPush() with cache-busted URL — do NOT register here to avoid conflicts
 
   // === Menu Toggle ===
   const menuBtn = document.getElementById('menuBtn');

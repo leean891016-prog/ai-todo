@@ -128,6 +128,10 @@ async function createVapidJWT(endpoint) {
 
 async function sendPush(subscription, title, body) {
   const endpoint = subscription.endpoint;
+  const hostname = new URL(endpoint).hostname;
+  console.log('[sendPush] target:', hostname);
+  console.log('[sendPush] endpoint:', endpoint.substring(0, 100) + '...');
+
   const auth = b64ToBytes(subscription.keys.auth);
   const p256dh = b64ToBytes(subscription.keys.p256dh);
   const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -136,6 +140,7 @@ async function sendPush(subscription, title, body) {
   const encrypted = await encryptPayload(auth, p256dh, salt, payload);
   const vapidJWT = await createVapidJWT(endpoint);
 
+  console.log('[sendPush] sending to', hostname, 'payload:', title, body);
   const resp = await fetch(endpoint, {
     method: 'POST',
     headers: {
@@ -147,10 +152,15 @@ async function sendPush(subscription, title, body) {
     body: encrypted
   });
 
+  console.log('[sendPush] response status:', resp.status);
+  const respBody = await resp.text();
+  console.log('[sendPush] response body (first 200 chars):', respBody.substring(0, 200));
+
   if (!resp.ok && resp.status !== 201) {
-    console.warn('Push failed:', resp.status, await resp.text());
+    console.warn('[sendPush] FAILED — status:', resp.status, 'body:', respBody.substring(0, 200));
     throw new Error('Push failed: ' + resp.status);
   }
+  console.log('[sendPush] SUCCESS — push sent to', hostname);
 }
 
 // ============ Main Handler ============
@@ -187,6 +197,16 @@ export default {
       try {
         const body = await request.json();
         const { deviceId, subscription, reminders } = body;
+        console.log('[sync] deviceId:', deviceId);
+        console.log('[sync] has subscription:', !!subscription);
+        if (subscription) {
+          console.log('[sync] sub endpoint:', subscription.endpoint ? subscription.endpoint.substring(0, 80) + '...' : 'MISSING');
+          console.log('[sync] sub keys:', subscription.keys ? Object.keys(subscription.keys).join(', ') : 'MISSING');
+        }
+        console.log('[sync] reminders count:', reminders ? reminders.length : 0);
+        if (reminders && reminders.length > 0) {
+          reminders.forEach(r => console.log('[sync] -', r.text, r.reminderDate, r.reminderTime));
+        }
         if (!deviceId) return new Response('missing deviceId', { status: 400 });
 
         const raw = await env.TODO_STORE.get('data');
@@ -199,6 +219,7 @@ export default {
         };
 
         await env.TODO_STORE.put('data', JSON.stringify(data));
+        console.log('[sync] saved to KV OK — deviceId:', deviceId);
 
         return new Response(JSON.stringify({ ok: true }), {
           headers: {
@@ -207,6 +228,7 @@ export default {
           }
         });
       } catch (e) {
+        console.error('[sync] ERROR:', e.message);
         return new Response(JSON.stringify({ error: e.message }), {
           status: 500,
           headers: {
@@ -221,18 +243,30 @@ export default {
   },
 
   async scheduled(event, env) {
+    console.log('[cron] === fired at', new Date().toISOString(), '===');
     const raw = await env.TODO_STORE.get('data');
-    if (!raw) return;
+    if (!raw) { console.log('[cron] no data in KV'); return; }
     const data = JSON.parse(raw);
-    if (!data.devices) return;
+    if (!data.devices) { console.log('[cron] no devices key in data'); return; }
+
+    const deviceIds = Object.keys(data.devices);
+    console.log('[cron] devices:', deviceIds.length, '-', deviceIds.join(', '));
 
     const today = getToday();
     const now = getTimeHM();
     const [nowH, nowM] = now.split(':').map(Number);
     const nowMinutes = nowH * 60 + nowM;
+    console.log('[cron] today:', today, ' now:', now, ' minutes:', nowMinutes);
 
     for (const [deviceId, device] of Object.entries(data.devices)) {
-      if (!device.subscription || !device.reminders || device.reminders.length === 0) continue;
+      const hasSub = !!device.subscription;
+      const reminderCount = device.reminders ? device.reminders.length : 0;
+      console.log('[cron] device', deviceId, 'hasSub:', hasSub, 'reminders:', reminderCount);
+
+      if (!device.subscription || !device.reminders || device.reminders.length === 0) {
+        console.log('[cron] skip', deviceId, '- no subscription or no reminders');
+        continue;
+      }
 
       // Fired tracking: per-device, per-day
       if (!device._fired) device._fired = {};
@@ -240,9 +274,11 @@ export default {
 
       for (const r of device.reminders) {
         if (!r.reminderTime || !r.reminderDate) continue;
-        if (r.reminderDate !== today) continue;
+        console.log('[cron] checking reminder:', r.text, 'date:', r.reminderDate, 'time:', r.reminderTime);
+        if (r.reminderDate !== today) { console.log('[cron] - not today, skip'); continue; }
         const [h, m] = r.reminderTime.split(':').map(Number);
         const rMinutes = h * 60 + m;
+        console.log('[cron] - rMinutes:', rMinutes, 'now:', nowMinutes, 'match:', nowMinutes >= rMinutes && nowMinutes < rMinutes + 1);
 
         // Fire within a 1-minute window, once per day
         if (nowMinutes >= rMinutes && nowMinutes < rMinutes + 1) {
@@ -251,10 +287,12 @@ export default {
             device._fired[today].push(fid);
             try {
               await sendPush(device.subscription, '⏰ 待办提醒', r.text);
-              console.log('Push sent to', deviceId, ':', r.text);
+              console.log('[cron] Push sent to', deviceId, ':', r.text);
             } catch (e) {
-              console.warn('Push failed for', deviceId, ':', e.message);
+              console.warn('[cron] Push failed for', deviceId, ':', e.message);
             }
+          } else {
+            console.log('[cron] - already fired today, skip');
           }
         }
       }
@@ -271,5 +309,6 @@ export default {
     }
 
     await env.TODO_STORE.put('data', JSON.stringify(data));
+    console.log('[cron] === done ===');
   }
 };
