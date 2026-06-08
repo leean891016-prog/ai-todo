@@ -228,7 +228,8 @@ async function fetchRemoteData() {
   try {
     const data = await _githubAPI('GET');
     if (!data || !data.content) return null;
-    const json = JSON.parse(atob(data.content.replace(/\s/g, '')));
+    const raw = atob(data.content.replace(/\s/g, ''));
+    const json = JSON.parse(decodeURIComponent(escape(raw)));
     return { ...json, _sha: data.sha };
   } catch (e) {
     console.warn('GitHub fetch failed:', e.message);
