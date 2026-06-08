@@ -229,7 +229,8 @@ async function fetchRemoteData() {
     const data = await _githubAPI('GET');
     if (!data || !data.content) return null;
     const raw = atob(data.content.replace(/\s/g, ''));
-    const json = JSON.parse(decodeURIComponent(escape(raw)));
+    const bytes = Uint8Array.from(raw, c => c.charCodeAt(0));
+    const json = JSON.parse(new TextDecoder().decode(bytes));
     return { ...json, _sha: data.sha };
   } catch (e) {
     console.warn('GitHub fetch failed:', e.message);
@@ -246,7 +247,8 @@ async function pushRemoteData(todos, projects) {
       if (existing) sha = existing.sha;
     } catch {}
 
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify({ todos, projects }))));
+    const bytes = new TextEncoder().encode(JSON.stringify({ todos, projects }));
+    const content = btoa(String.fromCharCode(...bytes));
     const body = { message: 'sync: ' + new Date().toLocaleString('zh-CN'), content };
     if (sha) body.sha = sha;
     await _githubAPI('PUT', body);
@@ -264,7 +266,7 @@ function mergeByUpdatedAt(localItems, remoteItems) {
   // Remote overwrites if newer
   remoteItems.forEach(item => {
     const existing = map.get(item.id);
-    if (!existing || (item.updatedAt > existing.updatedAt)) {
+    if (!existing || (item.updatedAt >= existing.updatedAt)) {
       map.set(item.id, item);
     }
   });
