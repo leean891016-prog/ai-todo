@@ -1,7 +1,7 @@
 // v2
 // ========== Config ==========
 
-const DEEPSEEK_KEY = 'sk-66b78210b3f6491c8844a9c8ca43113e';
+const DEEPSEEK_KEY = 'sk-adfe808bbd3c4932938a0689a60a5be9';
 
 // ========== Time Parser ==========
 
