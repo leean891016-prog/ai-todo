@@ -1266,11 +1266,15 @@ async function requestPushPermission() {
 function setupPushNotifications() {
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') {
-    // Already granted, sync silently
     syncRemindersToBackend(true);
+    showBanner('✅ 通知权限已开启，戳右上菜单可手动同步', false);
     return;
   }
-  // Show clickable banner to enable push
+  if (Notification.permission === 'denied') {
+    showBanner('⚠️ 通知被禁用，请到系统设置开启', true);
+    return;
+  }
+  // default: show clickable banner
   const banner = document.getElementById('banner');
   banner._pushAction = true;
   showBanner('🔔 点击此处开启推送提醒（锁屏也能收到）', true);
@@ -1288,6 +1292,13 @@ function setupPushNotifications() {
     location.reload();
   }
 })();
+
+// Kill any lingering Service Worker caches
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   await initStorage();
@@ -1455,6 +1466,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   document.getElementById('fontBtn').addEventListener('click', showFontOverlay);
+  document.getElementById('pushBtn').addEventListener('click', requestPushPermission);
   document.getElementById('fontOverlay').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) hideFontOverlay();
   });
