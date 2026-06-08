@@ -1238,89 +1238,110 @@ function getDeviceId() {
   return id;
 }
 
-async function subscribeToPush() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
-  if (typeof window.Notification === 'undefined') return null;
+// [v61] 全局存储已激活的 SW 注册，页面加载时准备好
+let _pushReg = null;
 
-  if (window.Notification.permission === 'default') {
-    const result = await window.Notification.requestPermission();
-    if (result !== 'granted') return null;
-  } else if (window.Notification.permission === 'denied') {
-    return null;
+async function ensureSWReady() {
+  if (_pushReg && _pushReg.active && _pushReg.pushManager) return _pushReg;
+  if (!('serviceWorker' in navigator)) return null;
+
+  let reg = await navigator.serviceWorker.getRegistration();
+  if (!reg) {
+    reg = await navigator.serviceWorker.register('sw.js?v=61');
   }
-
-  try {
-    // [v60] 极简：直接用已有 SW 注册，不清理不重注册
-    let reg = await navigator.serviceWorker.getRegistration();
-    if (!reg) {
-      reg = await navigator.serviceWorker.register('sw.js?v=60');
-    }
-    if (!reg.active) {
-      // SW 还没激活，等待最多 30 秒
-      updatePushStatus('⏳ 等待SW激活...', '#C4A86B');
-      reg = await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('SW激活超时(30s)')), 30000);
-        const check = () => {
-          navigator.serviceWorker.getRegistration().then(r => {
-            if (r && r.active) { clearTimeout(timeout); resolve(r); }
-            else setTimeout(check, 500);
-          }).catch(() => setTimeout(check, 500));
-        };
-        check();
-      });
-    }
-
-    updatePushStatus('⏳ 订阅中...', '#C4A86B');
-    if (!reg.pushManager) throw new Error('pushManager不可用');
-
-    let sub = await reg.pushManager.getSubscription();
-    if (!sub) {
-      sub = await Promise.race([
-        reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('订阅超时(15s)')), 15000))
-      ]);
-    }
-    return sub;
-  } catch (e) {
-    console.warn('Push subscribe failed:', e.message);
-    throw e;
+  if (!reg.active) {
+    // 等 SW 激活
+    reg = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('SW激活超时(30s)')), 30000);
+      const check = () => {
+        navigator.serviceWorker.getRegistration().then(r => {
+          if (r && r.active) { clearTimeout(timeout); resolve(r); }
+          else setTimeout(check, 500);
+        }).catch(() => setTimeout(check, 500));
+      };
+      check();
+    });
   }
+  _pushReg = reg;
+  return reg;
 }
 
+// [v61] 直接订阅，不做任何其他异步操作（保持用户手势上下文）
+async function doSubscribe() {
+  const reg = _pushReg;
+  if (!reg || !reg.active || !reg.pushManager) throw new Error('SW未就绪');
+
+  // 先获取已有订阅
+  let sub = null;
+  try { sub = await reg.pushManager.getSubscription(); } catch(e) { /* ignore */ }
+
+  if (!sub) {
+    sub = await Promise.race([
+      reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('订阅超时(15s)')), 15000))
+    ]);
+  }
+  return sub;
+}
+
+// [v61] 同步提醒到后端。如果 sub 已传入则直接使用，否则不发起新订阅（仅当 SW 已就绪时尝试）
 async function syncRemindersToBackend(silent) {
   if (!PUSH_WORKER_URL) return;
   try {
-    const sub = await subscribeToPush();
+    // 尝试获取已有订阅
+    let sub = null;
+    if (_pushReg && _pushReg.active) {
+      try { sub = await _pushReg.pushManager.getSubscription(); } catch(e) {}
+    }
     if (!sub) {
-      if (!silent) showBanner('推送未开启：请允许通知权限后刷新页面', true);
+      if (!silent) showBanner('推送未开启：请戳右上菜单开启推送', true);
       return;
     }
-    const todos = loadTodos();
-    const reminders = todos
-      .filter(t => !t.completed && t.reminderTime && t.reminderDate)
-      .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
-    const resp = await fetch(PUSH_WORKER_URL + '/api/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const result = await resp.json();
-    if (!result.ok) throw new Error(result.error || '后端错误');
-    if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
+    await syncRemindersWithSub(sub, silent);
   } catch (e) {
     console.warn('Sync reminders failed:', e.message);
     if (!silent) showBanner('⚠️ 推送同步失败: ' + e.message, true);
   }
 }
 
+async function syncRemindersWithSub(sub, silent) {
+  const todos = loadTodos();
+  const reminders = todos
+    .filter(t => !t.completed && t.reminderTime && t.reminderDate)
+    .map(t => ({ id: t.id, text: t.text, reminderTime: t.reminderTime, reminderDate: t.reminderDate }));
+  const resp = await fetch(PUSH_WORKER_URL + '/api/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deviceId: getDeviceId(), subscription: sub.toJSON(), reminders }),
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const result = await resp.json();
+  if (!result.ok) throw new Error(result.error || '后端错误');
+  if (!silent) showBanner('✅ 推送已就绪，提醒已同步', false);
+}
+
 // ========== Push Setup (user-triggered) ==========
 
 async function requestPushPermission() {
-  // Must be called from user gesture on iOS
+  // [v61] Step 1: 确保 SW 已就绪（应该在页面加载时已完成）
+  updatePushStatus('⏳ 检查SW...', '#C4A86B');
+  try {
+    await ensureSWReady();
+  } catch (e) {
+    updatePushStatus('❌ SW未就绪: ' + e.message, '#e74c3c');
+    showBanner('推送服务未就绪，请刷新页面', true);
+    return;
+  }
+  if (!_pushReg || !_pushReg.active) {
+    updatePushStatus('❌ SW未激活', '#e74c3c');
+    showBanner('推送服务未激活，请刷新页面', true);
+    return;
+  }
+
+  // [v61] Step 2: 请求通知权限（如果还没授权）
   if (window.Notification.permission === 'default') {
     updatePushStatus('⏳ 请求权限中...', '#C4A86B');
     const result = await window.Notification.requestPermission();
@@ -1335,27 +1356,32 @@ async function requestPushPermission() {
     showBanner('通知已被系统禁用，请到设置中开启', true);
     return;
   }
-  // Permission granted, now subscribe and sync
-  updatePushStatus('⏳ 订阅推送中...', '#C4A86B');
+
+  // [v61] Step 3: 直接订阅（在用户手势上下文中）
+  updatePushStatus('⏳ 订阅中...', '#C4A86B');
   let sub;
   try {
-    sub = await subscribeToPush();
+    sub = await doSubscribe();
   } catch (e) {
     updatePushStatus('❌ ' + e.message, '#e74c3c');
     showBanner('订阅失败: ' + e.message, true);
     return;
   }
   if (!sub) {
-    updatePushStatus('❌ 订阅失败(权限)', '#e74c3c');
-    showBanner('推送订阅失败，请检查网络后重试', true);
+    updatePushStatus('❌ 订阅返回空', '#e74c3c');
+    showBanner('推送订阅失败，请重试', true);
     return;
   }
+
+  // [v61] Step 4: 同步到后端
+  updatePushStatus('⏳ 同步中...', '#C4A86B');
   try {
-    await syncRemindersToBackend(true);
+    await syncRemindersWithSub(sub, true);
     updatePushStatus('✅ 推送已就绪', '#7A9A7E');
     showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
   } catch (e) {
     updatePushStatus('❌ 同步失败: ' + e.message, '#e74c3c');
+    showBanner('同步失败: ' + e.message, true);
   }
 }
 
@@ -1447,9 +1473,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // === Service Worker（提前注册，等按钮点击时已就绪）===
+  // === Service Worker（v61：提前注册并阻塞等待激活）===
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js?v=60');
+    navigator.serviceWorker.register('sw.js?v=61');
+    // 提前激活 SW，确保点按钮时已就绪
+    ensureSWReady().catch(() => {});
   }
 
   // === Menu Toggle ===
