@@ -1,5 +1,5 @@
 // Version: increment on each deploy to force cache refresh
-const VERSION = 'v44';
+const VERSION = 'v45';
 const CACHE = 'ai-todo-' + VERSION;
 
 // Self-destruct: unregister this SW so it stops caching
