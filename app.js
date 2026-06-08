@@ -39,13 +39,109 @@ function parseReminderTime(text) {
   return { time: `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`, dateOffset, matchedLen: m[0].length };
 }
 
-// ========== Storage ==========
+// ========== IndexedDB Storage ==========
+// iOS PWA can purge localStorage; IndexedDB is treated as "real" data and persists reliably.
 
-const STORAGE_KEY = 'ai-todo-items';
+const DB_NAME = 'ai-todo-db';
+const DB_VERSION = 1;
+const STORAGE_KEY = 'ai-todo-items';    // legacy localStorage keys for fallback
 const PROJECTS_KEY = 'ai-todo-projects';
 const COLLAPSED_KEY = 'ai-todo-completed-collapsed';
 const NOTIFIED_KEY = 'ai-todo-notified';
 const REVIEW_KEY = 'ai-todo-review-done';
+
+let _todosCache = [];
+let _projectsCache = [];
+let _dbReady = false;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('todos')) db.createObjectStore('todos', { keyPath: 'id' });
+      if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'id' });
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbGetAll(db, storeName) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function dbPutAll(db, storeName, items) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    store.clear(); // replace all
+    items.forEach(item => store.put(item));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function initStorage() {
+  // 1. Try IndexedDB
+  try {
+    const db = await openDB();
+    let todos = await dbGetAll(db, 'todos');
+    let projects = await dbGetAll(db, 'projects');
+
+    if (todos.length > 0 || projects.length > 0) {
+      _todosCache = todos;
+      _projectsCache = projects;
+      _dbReady = true;
+      // Sync back to localStorage as backup
+      syncToLocalStorage();
+      return;
+    }
+  } catch (e) {
+    console.warn('IndexedDB init failed, trying localStorage fallback:', e.message);
+  }
+
+  // 2. Fallback: load from localStorage, then migrate to IndexedDB
+  try {
+    _todosCache = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    _projectsCache = JSON.parse(localStorage.getItem(PROJECTS_KEY)) || [];
+  } catch { _todosCache = []; _projectsCache = []; }
+
+  // Migrate: add type field
+  let changed = false;
+  _todosCache.forEach(t => { if (!t.type) { t.type = 'daily'; changed = true; } });
+  if (changed) syncToLocalStorage();
+
+  // Try to save to IndexedDB for future
+  try {
+    const db = await openDB();
+    await dbPutAll(db, 'todos', _todosCache);
+    await dbPutAll(db, 'projects', _projectsCache);
+    _dbReady = true;
+  } catch { /* IndexedDB unavailable, stay on localStorage */ }
+}
+
+function syncToLocalStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(_todosCache));
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(_projectsCache));
+  } catch {}
+}
+
+function _saveTodosToDB(todos) {
+  if (!_dbReady) return;
+  openDB().then(db => dbPutAll(db, 'todos', todos)).catch(() => {});
+}
+
+function _saveProjectsToDB(projects) {
+  if (!_dbReady) return;
+  openDB().then(db => dbPutAll(db, 'projects', projects)).catch(() => {});
+}
 
 function fmtDate(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -66,21 +162,22 @@ function formatDateLabel(dateStr) {
 }
 
 function loadTodos() {
-  try {
-    let todos = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-    // Migrate old data: add type field
-    let changed = false;
-    todos.forEach(t => { if (!t.type) { t.type = 'daily'; changed = true; } });
-    if (changed) saveTodos(todos);
-    return todos;
-  } catch { return []; }
+  return _todosCache;
 }
-function saveTodos(todos) { localStorage.setItem(STORAGE_KEY, JSON.stringify(todos)); }
+function saveTodos(todos) {
+  _todosCache = todos;
+  syncToLocalStorage();
+  _saveTodosToDB(todos);
+}
 
 function loadProjects() {
-  try { return JSON.parse(localStorage.getItem(PROJECTS_KEY)) || []; } catch { return []; }
+  return _projectsCache;
 }
-function saveProjects(projects) { localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects)); }
+function saveProjects(projects) {
+  _projectsCache = projects;
+  syncToLocalStorage();
+  _saveProjectsToDB(projects);
+}
 
 function genId() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
 
@@ -1153,7 +1250,8 @@ function render() {
 
 // ========== Init ==========
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  await initStorage();
   render();
 
   // Tab switching
