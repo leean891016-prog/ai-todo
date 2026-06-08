@@ -1281,22 +1281,29 @@ async function requestPushPermission() {
 }
 
 function setupPushNotifications() {
-  if (!('Notification' in window)) {
-    updatePushStatus('⚠️ 此浏览器不支持通知', '#e74c3c');
+  // Diagnostic: check what's available
+  const hasNotify = typeof Notification !== 'undefined';
+  const hasSW = 'serviceWorker' in navigator;
+  const hasPush = 'PushManager' in window;
+  const perm = hasNotify ? Notification.permission : 'N/A';
+
+  if (!hasNotify) {
+    updatePushStatus('⚠️ Notification API 不可用 (iOS版本过低或浏览器不支持)', '#e74c3c');
+    console.log('Push diag: hasNotify=false, hasSW=' + hasSW + ', hasPush=' + hasPush);
     return;
   }
-  if (Notification.permission === 'granted') {
+  if (perm === 'granted') {
     updatePushStatus('✅ 通知已授权', '#7A9A7E');
     syncRemindersToBackend(true);
     return;
   }
-  if (Notification.permission === 'denied') {
+  if (perm === 'denied') {
     updatePushStatus('🚫 通知被禁用', '#e74c3c');
     showBanner('⚠️ 通知被禁用，请到系统设置开启', true);
     return;
   }
   // default: not yet asked
-  updatePushStatus('📢 未授权', '#C4A86B');
+  updatePushStatus('📢 未授权 - 戳右上菜单开启', '#C4A86B');
   const banner = document.getElementById('banner');
   if (banner) banner._pushAction = true;
   showBanner('🔔 点击此处开启推送提醒（锁屏也能收到）', true);
