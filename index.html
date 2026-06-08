@@ -84,6 +84,23 @@ body {
   100% { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
 }
 
+.view-page.turning-out-back {
+  transform-origin: right center;
+  animation: pageOutBack 0.3s ease-in forwards;
+}
+.view-page.turning-in-back {
+  transform-origin: right center;
+  animation: pageInBack 0.3s ease-out forwards;
+}
+@keyframes pageOutBack {
+  0%   { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
+  100% { transform: rotateY(85deg); opacity: 0; filter: brightness(0.6); }
+}
+@keyframes pageInBack {
+  0%   { transform: rotateY(-85deg); opacity: 0; filter: brightness(0.6); }
+  100% { transform: rotateY(0deg); opacity: 1; filter: brightness(1); }
+}
+
 .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 36px; padding-bottom: 16px; border-bottom: var(--bw) solid var(--line); }
 .header-left { display: flex; flex-direction: column; }
 .header-left h1 { font-size: 28px; font-weight: 400; letter-spacing: 3px; color: var(--text); }
@@ -461,10 +478,11 @@ body {
 .priority-menu-cancel:active { color: var(--warn); }
 
 .todo-edit-input {
-  flex: 1; font-size: 15px; font-family: inherit; font-weight: 300;
+  flex: 1; font-size: 16px; font-family: inherit; font-weight: 300;
   border: none; border-bottom: var(--bw) solid var(--accent);
   background: transparent; color: var(--text); outline: none;
   padding: 2px 0; letter-spacing: 0.3px; min-width: 0;
+  -webkit-appearance: none; border-radius: 0; user-select: text;
 }
 </style>
 </head>

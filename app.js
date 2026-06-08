@@ -519,10 +519,15 @@ function switchTab(tab) {
   if (!view || isAnimating) { currentTab = tab; render(); return; }
   isAnimating = true;
 
-  view.classList.add('turning-out');
+  const tabs = ['inspiration', 'daily', 'projects'];
+  const forward = tabs.indexOf(tab) > tabs.indexOf(currentTab);
+  const outClass = forward ? 'turning-out' : 'turning-out-back';
+  const inClass = forward ? 'turning-in' : 'turning-in-back';
+
+  view.classList.add(outClass);
   view.addEventListener('animationend', function handler() {
     view.removeEventListener('animationend', handler);
-    view.classList.remove('turning-out');
+    view.classList.remove(outClass);
 
     currentTab = tab;
     currentProjectId = null;
@@ -530,10 +535,10 @@ function switchTab(tab) {
     render();
 
     requestAnimationFrame(() => {
-      view.classList.add('turning-in');
+      view.classList.add(inClass);
       view.addEventListener('animationend', function h2() {
         view.removeEventListener('animationend', h2);
-        view.classList.remove('turning-in');
+        view.classList.remove(inClass);
         isAnimating = false;
       });
     });
@@ -658,8 +663,8 @@ function startEdit(todoId) {
   input.className = 'todo-edit-input';
   input.value = todo.text;
   textSpan.appendChild(input);
-
-  requestAnimationFrame(() => { input.focus(); input.select(); });
+  input.focus();
+  input.setSelectionRange(0, input.value.length);
 
   let handled = false;
   function finish(save) {
