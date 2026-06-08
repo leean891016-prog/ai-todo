@@ -1561,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js?v=' + Date.now()).then(reg => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
       // Auto-reload when SW sends NEW_VERSION message
       navigator.serviceWorker.addEventListener('message', (e) => {
         if (e.data && e.data.type === 'NEW_VERSION') {
