@@ -1250,106 +1250,43 @@ async function subscribeToPush() {
   }
 
   try {
-    // [v57] 1. 强制清理所有旧 SW 注册
-    updatePushStatus('⏳ 清理旧注册...', '#C4A86B');
-    const oldRegs = await navigator.serviceWorker.getRegistrations();
-    if (oldRegs.length > 0) {
-      await Promise.all(oldRegs.map(r => r.unregister()));
-      // 等浏览器处理完注销
-      await new Promise(r => setTimeout(r, 800));
+    // [v60] 极简：直接用已有 SW 注册，不清理不重注册
+    let reg = await navigator.serviceWorker.getRegistration();
+    if (!reg) {
+      reg = await navigator.serviceWorker.register('sw.js?v=60');
     }
-
-    // [v57] 2. 二次确认无残留
-    const remaining = await navigator.serviceWorker.getRegistrations();
-    if (remaining.length > 0) {
-      await Promise.all(remaining.map(r => r.unregister()));
-      await new Promise(r => setTimeout(r, 500));
-    }
-
-    // [v57] 3. 全新注册 SW
-    updatePushStatus('⏳ 注册新SW...', '#C4A86B');
-    const reg = await navigator.serviceWorker.register('sw.js?v=59');
-
-    // [v57] 4. 用 statechange 事件等待激活（比轮询更可靠）
     if (!reg.active) {
-      const sw = reg.installing || reg.waiting;
-      if (sw) {
-        updatePushStatus('⏳ 等待SW激活...', '#C4A86B');
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('SW激活超时(20s)')), 20000);
-          sw.addEventListener('statechange', function f() {
-            if (sw.state === 'activated') {
-              clearTimeout(timeout);
-              sw.removeEventListener('statechange', f);
-              resolve();
-            }
-          });
-          // 如果 SW 在事件绑定前已经激活了
-          if (sw.state === 'activated') {
-            clearTimeout(timeout);
-            sw.removeEventListener('statechange', f);
-            resolve();
-          }
-        });
-      } else if (reg.waiting) {
-        // skipWaiting 已调用，可能在等待中
-        updatePushStatus('⏳ SW等待中...', '#C4A86B');
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('SW等待超时(20s)')), 20000);
-          reg.waiting.addEventListener('statechange', function f() {
-            if (reg.waiting.state === 'activated') {
-              clearTimeout(timeout);
-              reg.waiting.removeEventListener('statechange', f);
-              resolve();
-            }
-          });
-        });
-      } else {
-        // 没有 installing/waiting worker，可能已激活
-        // 用 reg.update() 触发更新，然后等待
-        updatePushStatus('⏳ 触发SW更新...', '#C4A86B');
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('SW更新超时(20s)')), 20000);
-          reg.addEventListener('updatefound', function f() {
-            const newSw = reg.installing;
-            if (newSw) {
-              newSw.addEventListener('statechange', function g() {
-                if (newSw.state === 'activated') {
-                  clearTimeout(timeout);
-                  newSw.removeEventListener('statechange', g);
-                  reg.removeEventListener('updatefound', f);
-                  resolve();
-                }
-              });
-            }
-          });
-          reg.update().catch(() => {});
-        });
-      }
-    }
-
-    // [v58 fix] Re-fetch registration — iOS may have stale ref after activation
-    reg = await navigator.serviceWorker.getRegistration();
-    if (!reg || !reg.active) {
-      throw new Error('SW激活后注册丢失');
+      // SW 还没激活，等待最多 30 秒
+      updatePushStatus('⏳ 等待SW激活...', '#C4A86B');
+      reg = await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('SW激活超时(30s)')), 30000);
+        const check = () => {
+          navigator.serviceWorker.getRegistration().then(r => {
+            if (r && r.active) { clearTimeout(timeout); resolve(r); }
+            else setTimeout(check, 500);
+          }).catch(() => setTimeout(check, 500));
+        };
+        check();
+      });
     }
 
     updatePushStatus('⏳ 订阅中...', '#C4A86B');
+    if (!reg.pushManager) throw new Error('pushManager不可用');
+
     let sub = await reg.pushManager.getSubscription();
     if (!sub) {
-      // iOS pushManager.subscribe can hang — wrap with 10s timeout
       sub = await Promise.race([
         reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY),
         }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('订阅超时(10s)')), 10000))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('订阅超时(15s)')), 15000))
       ]);
     }
     return sub;
   } catch (e) {
     console.warn('Push subscribe failed:', e.message);
-    return null;
+    throw e;
   }
 }
 
@@ -1400,9 +1337,16 @@ async function requestPushPermission() {
   }
   // Permission granted, now subscribe and sync
   updatePushStatus('⏳ 订阅推送中...', '#C4A86B');
-  const sub = await subscribeToPush();
+  let sub;
+  try {
+    sub = await subscribeToPush();
+  } catch (e) {
+    updatePushStatus('❌ ' + e.message, '#e74c3c');
+    showBanner('订阅失败: ' + e.message, true);
+    return;
+  }
   if (!sub) {
-    updatePushStatus('❌ 订阅失败', '#e74c3c');
+    updatePushStatus('❌ 订阅失败(权限)', '#e74c3c');
     showBanner('推送订阅失败，请检查网络后重试', true);
     return;
   }
@@ -1411,7 +1355,7 @@ async function requestPushPermission() {
     updatePushStatus('✅ 推送已就绪', '#7A9A7E');
     showBanner('✅ 推送已开启！锁屏也能收到提醒', false);
   } catch (e) {
-    updatePushStatus('❌ 同步失败', '#e74c3c');
+    updatePushStatus('❌ 同步失败: ' + e.message, '#e74c3c');
   }
 }
 
@@ -1503,8 +1447,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // === Service Worker ===
-  // Registered in subscribeToPush() with cache-busted URL — do NOT register here to avoid conflicts
+  // === Service Worker（提前注册，等按钮点击时已就绪）===
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js?v=60');
+  }
 
   // === Menu Toggle ===
   const menuBtn = document.getElementById('menuBtn');
