@@ -784,10 +784,11 @@ function renderInspiration() {
   });
 }
 
-function priorityDot(todo) {
-  const cls = todo.priority === 'urgent' ? 'urgent' : todo.priority === 'important' ? 'important' : '';
-  return '<span class="priority-dot-wrap" data-action="cycle-priority" data-id="' + todo.id + '">' +
-    '<span class="priority-dot ' + cls + '"></span></span>';
+function priorityIcon(todo) {
+  const icon = todo.priority === 'urgent' ? '⚡' : todo.priority === 'important' ? '⭐' : '○';
+  const cls = 'priority-icon' + (todo.priority ? ' priority-' + todo.priority : '');
+  return '<span class="priority-icon-wrap" data-action="cycle-priority" data-id="' + todo.id + '">' +
+    '<span class="' + cls + '">' + icon + '</span></span>';
 }
 
 function prioritySort(a, b) {
@@ -852,7 +853,7 @@ function renderDaily() {
       (t.postponeCount >= 3 ? '<span style="font-size:16px;flex-shrink:0;" title="拖了' + t.postponeCount + '天">😴</span>' : '') +
       '<span class="text">' + (isExpired(t) ? '<span style="font-size:12px;color:var(--danger);font-weight:600;">已过期 · 原定' + t.reminderTime + ' </span>' : '') + escapeHtml(t.text) + '</span>' +
       (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
-      priorityDot(t) +
+      priorityIcon(t) +
       '<button class="link-btn' + (t.linkGroup ? ' linked' : '') + '" data-action="link-todo" data-id="' + t.id + '">📎</button>' +
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
@@ -867,7 +868,7 @@ function renderDaily() {
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
         '<span class="time-badge" style="opacity:0.6;">' + dateLabel + (t.reminderTime ? ' ' + t.reminderTime : '') + '</span>' +
-        priorityDot(t) +
+        priorityIcon(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     html += '</ul>';
@@ -986,7 +987,7 @@ function renderProjectDetail(projectId) {
       html += '<li class="todo-item" data-id="' + t.id + '">' +
         '<span class="circle"></span>' +
         '<span class="text">' + escapeHtml(t.text) + '</span>' +
-        priorityDot(t) +
+        priorityIcon(t) +
         '<button class="delete-btn" data-action="delete">×</button></li>';
     });
     done.forEach(t => {
