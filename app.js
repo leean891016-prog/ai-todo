@@ -374,8 +374,8 @@ function saveNotified() {
 }
 
 function fireNotification(title, body, vibrate) {
-  if (Notification.permission !== 'granted') return;
-  new Notification(title, { body, icon: 'icon-192.png', tag: 'ai-todo-reminder', requireInteraction: true });
+  if (window.Notification.permission !== 'granted') return;
+  new window.Notification(title, { body, icon: 'icon-192.png', tag: 'ai-todo-reminder', requireInteraction: true });
   if (vibrate && navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }
 
@@ -1199,13 +1199,13 @@ function getDeviceId() {
 
 async function subscribeToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
-  if (!('Notification' in window)) return null;
+  if (typeof window.Notification === 'undefined') return null;
 
   // Request notification permission if not yet granted
-  if (Notification.permission === 'default') {
-    const result = await Notification.requestPermission();
+  if (window.Notification.permission === 'default') {
+    const result = await window.Notification.requestPermission();
     if (result !== 'granted') return null;
-  } else if (Notification.permission === 'denied') {
+  } else if (window.Notification.permission === 'denied') {
     return null;
   }
 
@@ -1253,16 +1253,16 @@ async function syncRemindersToBackend(silent) {
 
 async function requestPushPermission() {
   // Must be called from user gesture on iOS
-  if (Notification.permission === 'default') {
+  if (window.Notification.permission === 'default') {
     updatePushStatus('⏳ 请求权限中...', '#C4A86B');
-    const result = await Notification.requestPermission();
+    const result = await window.Notification.requestPermission();
     if (result !== 'granted') {
       updatePushStatus('🚫 权限被拒', '#e74c3c');
       showBanner('通知权限被拒绝，推送无法使用', true);
       return;
     }
     updatePushStatus('✅ 权限已授权', '#7A9A7E');
-  } else if (Notification.permission === 'denied') {
+  } else if (window.Notification.permission === 'denied') {
     updatePushStatus('🚫 通知被禁用', '#e74c3c');
     showBanner('通知已被系统禁用，请到设置中开启', true);
     return;
@@ -1282,10 +1282,10 @@ async function requestPushPermission() {
 
 function setupPushNotifications() {
   // Diagnostic: check what's available
-  const hasNotify = typeof Notification !== 'undefined';
+  const hasNotify = typeof window.Notification !== 'undefined';
   const hasSW = 'serviceWorker' in navigator;
   const hasPush = 'PushManager' in window;
-  const perm = hasNotify ? Notification.permission : 'N/A';
+  const perm = hasNotify ? window.Notification.permission : 'N/A';
 
   if (!hasNotify) {
     updatePushStatus('⚠️ Notification API 不可用 (iOS版本过低或浏览器不支持)', '#e74c3c');
