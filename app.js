@@ -817,12 +817,6 @@ function prioritySort(a, b) {
   return a.text.localeCompare(b.text);
 }
 
-let priorityFilter = 'all'; // 'all' | 'both' | 'urgent' | 'important' | 'null'
-
-function setPriorityFilter(val) {
-  priorityFilter = val;
-  render();
-}
 
 function renderDaily() {
   document.getElementById('headerTitle').textContent = '日常';
@@ -836,15 +830,8 @@ function renderDaily() {
   const todayItems = allActive.filter(t => !t.reminderDate || t.reminderDate <= today);
   const futureItems = allActive.filter(t => t.reminderDate && t.reminderDate > today);
 
-  // Apply filter
-  const filterLabels = { both: '重要且紧急', urgent: '紧急', important: '重要', null: '无优先级' };
-  const filtered = priorityFilter === 'all' ? todayItems : todayItems.filter(t => {
-    if (priorityFilter === 'null') return !t.priority;
-    return t.priority === priorityFilter;
-  });
-
   // Sort today's items by priority, then time (no expired-to-top)
-  const sorted = applyAIOrder(filtered).sort((a, b) => {
+  const sorted = applyAIOrder(todayItems).sort((a, b) => {
     if (aiOrder && aiOrder.order) return 0;
     return prioritySort(a, b);
   });
@@ -864,15 +851,7 @@ function renderDaily() {
     '<button type="button" class="mic-btn" id="micBtn" title="语音输入">🎤</button>' +
     '<button type="submit">+</button></form>';
 
-  // Priority filter pills
-  html += '<div class="filter-pills">';
-  ['all', 'both', 'urgent', 'important', 'null'].forEach(val => {
-    const labelMap = { all: '全部', both: '🔥 重要且紧急', urgent: '⚡ 紧急', important: '⭐ 重要', null: '○ 无' };
-    html += '<span class="filter-pill' + (priorityFilter === val ? ' active' : '') + '" data-filter="' + val + '">' + labelMap[val] + '</span>';
-  });
-  html += '</div>';
-
-  html += '<div class="section-title">' + (priorityFilter !== 'all' ? (filterLabels[priorityFilter] || '') + ' · ' : '') + '今天 (' + filtered.length + ')</div><ul class="todo-list" id="activeList">';
+  html += '<div class="section-title">今天 (' + todayItems.length + ')</div><ul class="todo-list" id="activeList">';
   if (sorted.length === 0) html += '<li class="empty">今天没有待办 🎉</li>';
   else sorted.forEach(t => {
     html += '<li class="todo-item' + (isExpired(t) ? ' expired' : '') + '" data-id="' + t.id + '">' +
@@ -926,10 +905,6 @@ function renderDaily() {
     addTodo(inp.value, 'daily'); inp.value = ''; inp.focus();
   });
 
-  // Filter pills
-  document.querySelectorAll('.filter-pill').forEach(pill => {
-    pill.addEventListener('click', () => setPriorityFilter(pill.dataset.filter));
-  });
 
   // Voice input
   setupVoiceInput();

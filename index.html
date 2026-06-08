@@ -329,24 +329,6 @@ body {
 }
 .link-item:active { color: var(--accent); }
 
-/* Priority filter pills */
-.filter-pills {
-  display: flex; gap: 8px; padding: 4px 0 12px 0;
-  overflow-x: auto; -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-.filter-pills::-webkit-scrollbar { display: none; }
-.filter-pill {
-  flex-shrink: 0; padding: 5px 12px; border-radius: 14px;
-  font-size: 12px; font-weight: var(--fw-body);
-  border: var(--bw) solid var(--line);
-  background: var(--bg); color: var(--text-dim);
-  cursor: pointer; transition: all 0.15s;
-  white-space: nowrap;
-}
-.filter-pill.active {
-  background: var(--accent); color: #fff; border-color: var(--accent);
-}
 
 /* Completed report */
 .report-stats { margin-bottom: 28px; }
@@ -600,6 +582,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>
