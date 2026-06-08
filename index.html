@@ -300,12 +300,13 @@ body {
 .link-btn.linked { color: var(--accent); }
 
 .priority-btn {
-  flex-shrink: 0; width: 36px; height: 36px; border: none; background: none;
-  font-size: 14px; cursor: pointer;
+  flex-shrink: 0; height: 28px; padding: 0 10px; border: var(--bw) solid var(--line);
+  border-radius: 14px; background: var(--bg);
+  font-size: 13px; cursor: pointer; white-space: nowrap;
   display: flex; align-items: center; justify-content: center;
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent; margin: 0 4px;
 }
-.priority-btn:active { transform: scale(1.2); }
+.priority-btn:active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .link-overlay {
   position: fixed; inset: 0; z-index: 2000; background: rgba(60,56,53,0.15);
@@ -621,6 +622,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

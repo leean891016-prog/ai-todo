@@ -786,10 +786,9 @@ function renderInspiration() {
 }
 
 function priorityBtn(todo) {
-  const icon = todo.priority === 'both' ? '🔥' : todo.priority === 'important' ? '⭐' :
-    todo.priority === 'urgent' ? '⚡' : '▸';
-  const opacity = todo.priority ? '' : ' style=\"opacity:0.3\"';
-  return '<button class=\"priority-btn\" data-action=\"pri-menu\" data-id=\"' + todo.id + '\"' + opacity + '>' + icon + '</button>';
+  const label = todo.priority === 'both' ? '🔥 重急' : todo.priority === 'important' ? '⭐ 重要' :
+    todo.priority === 'urgent' ? '⚡ 紧急' : '+ 优先级';
+  return '<button class=\"priority-btn\" data-action=\"pri-menu\" data-id=\"' + todo.id + '\">' + label + '</button>';
 }
 
 function priorityBar(todo) {
