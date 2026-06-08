@@ -634,44 +634,6 @@ function toggleTodo(id) {
   saveTodos(todos); render();
 }
 
-function linkToProject(todoId, projectId) {
-  const todos = loadTodos();
-  const todo = todos.find(t => t.id === todoId); if (!todo) return;
-
-  const linkGroup = todo.linkGroup || genId();
-  todo.linkGroup = linkGroup;
-
-  // Create project copy
-  const copy = { ...todo, id: genId(), type: 'project', projectId, linkGroup };
-  todos.push(copy);
-  saveTodos(todos);
-  hideLinkPanel();
-  render();
-}
-
-let pendingLinkId = null;
-
-function showLinkPanel(todoId) {
-  pendingLinkId = todoId;
-  const projects = loadProjects();
-  const list = document.getElementById('linkList');
-  if (projects.length === 0) {
-    list.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:20px;">还没有项目，先去 📁 项目 创建一个</div>';
-  } else {
-    list.innerHTML = projects.map(p =>
-      '<div class="link-item" data-proj-id="' + p.id + '">📁 ' + escapeHtml(p.name) + '</div>'
-    ).join('');
-    list.querySelectorAll('.link-item').forEach(el => {
-      el.addEventListener('click', () => linkToProject(todoId, el.dataset.projId));
-    });
-  }
-  document.getElementById('linkOverlay').classList.add('show');
-}
-
-function hideLinkPanel() {
-  document.getElementById('linkOverlay').classList.remove('show');
-  pendingLinkId = null;
-}
 
 function deleteTodo(id) {
   saveTodos(loadTodos().filter(t => t.id !== id)); render();
@@ -861,7 +823,6 @@ function renderDaily() {
       (t.reminderTime ? '<span class="time-badge">🔔 ' + t.reminderTime + '</span>' : '') +
       
       priorityBtn(t) +
-      '<button class="link-btn' + (t.linkGroup ? ' linked' : '') + '" data-action="link-todo" data-id="' + t.id + '">📎</button>' +
       '<button class="delete-btn" data-action="delete">×</button></li>';
   });
   html += '</ul>';
@@ -1099,9 +1060,6 @@ function bindListEvents() {
       } else if (e.target.closest('[data-action="pri-menu"]')) {
         e.stopPropagation();
         showPriorityMenu(e.target.closest('[data-action="pri-menu"]').dataset.id);
-      } else if (e.target.closest('[data-action="link-todo"]')) {
-        e.stopPropagation();
-        showLinkPanel(el.dataset.id);
       } else if (e.target.closest('[data-action="cycle-priority"]')) {
         e.stopPropagation();
         const id = e.target.closest('[data-action="cycle-priority"]').dataset.id;
@@ -1595,10 +1553,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (e.target === e.currentTarget) hideReviewPanel();
   });
 
-  // Link panel
-  document.getElementById('linkOverlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) hideLinkPanel();
-  });
 
   // API Key toggle
 
@@ -1796,6 +1750,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     item.addEventListener('click', () => setPriorityFromMenu(item.dataset.pri));
   });
 
+  // === Swipe navigation ===
+  (function setupSwipe() {
+    const tabs = ['inspiration', 'daily', 'projects'];
+    let startX = 0, startY = 0;
+    const app = document.querySelector('.app');
+    if (!app) return;
+    app.addEventListener('touchstart', (e) => {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    app.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      const dy = e.changedTouches[0].clientY - startY;
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
+      if (currentProjectId) return;
+      const idx = tabs.indexOf(currentTab);
+      if (dx > 0 && idx > 0) switchTab(tabs[idx - 1]);
+      else if (dx < 0 && idx < tabs.length - 1) switchTab(tabs[idx + 1]);
+    });
+  })();
 });
 
 document.addEventListener('visibilitychange', () => {

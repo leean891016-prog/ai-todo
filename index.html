@@ -290,14 +290,6 @@ body {
 .filter-pill.urgent.active { color: var(--warn); border-bottom-color: var(--warn); }
 .filter-pill.important.active { color: var(--gold); border-bottom-color: var(--gold); }
 
-.link-btn {
-  flex-shrink: 0; width: 36px; height: 36px; border: none; background: none;
-  color: var(--text-dim); font-size: 12px; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  -webkit-tap-highlight-color: transparent;
-}
-.link-btn:active { color: var(--accent); }
-.link-btn.linked { color: var(--accent); }
 
 .priority-btn {
   flex-shrink: 0; height: 28px; padding: 0 10px; border: var(--bw) solid var(--line);
@@ -307,27 +299,6 @@ body {
   -webkit-tap-highlight-color: transparent; margin: 0 4px;
 }
 .priority-btn:active { background: var(--accent); color: #fff; border-color: var(--accent); }
-
-.link-overlay {
-  position: fixed; inset: 0; z-index: 2000; background: rgba(60,56,53,0.15);
-  display: none; align-items: center; justify-content: center;
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-}
-.link-overlay.show { display: flex; }
-.link-panel {
-  width: calc(100% - 48px); max-width: 340px; max-height: 60vh;
-  background: var(--paper); border-radius: 8px;
-  padding: 28px 24px; display: flex; flex-direction: column;
-  box-shadow: 0 2px 16px rgba(60,56,53,0.08);
-}
-.link-panel h3 { font-size: 18px; font-weight: 300; margin-bottom: 4px; letter-spacing: 1px; }
-.link-panel .link-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 20px; font-weight: 300; }
-.link-list { flex: 1; overflow-y: auto; }
-.link-item {
-  padding: 16px 0; border-bottom: var(--bw) solid var(--line);
-  font-size: 15px; font-weight: 300; cursor: pointer; display: flex; align-items: center; gap: 8px;
-}
-.link-item:active { color: var(--accent); }
 
 
 /* Completed report */
@@ -529,13 +500,6 @@ body {
   <button data-tab="projects">📁 项目</button>
 </nav>
 
-<div class="link-overlay" id="linkOverlay">
-  <div class="link-panel">
-    <h3>📎 移动到项目</h3>
-    <div class="link-sub">选择一个项目，待办将同步联动</div>
-    <div class="link-list" id="linkList"></div>
-  </div>
-</div>
 
 <div class="theme-overlay" id="themeOverlay">
   <div class="theme-panel">
@@ -582,6 +546,6 @@ body {
   </div>
 </div>
 
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>
