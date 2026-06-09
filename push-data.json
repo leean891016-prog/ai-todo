@@ -1,3 +1,1 @@
-{
-  "devices": {}
-}
+{"devices":{"test-sync":{"subscription":{"endpoint":"test","keys":{"auth":"a","p256dh":"b"}},"reminders":[],"updatedAt":1780965002000}}}
