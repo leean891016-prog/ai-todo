@@ -1222,19 +1222,27 @@ function render() {
 
 // ========== Push Notifications ==========
 
-// GitHub API sync (国内可访问) — token通过URL参数?token=xxx或localStorage传入
+// GitHub API sync (国内可访问) — token通过URL参数?token=xxx传入，存入Cookie（iOS Safari/PWA共享）
 function getGitHubToken() {
-  // 1) URL参数
+  // 1) Cookie 中读取（iOS Safari和PWA共享Cookie）
+  const match = document.cookie.match(/(?:^|;\s*)gh-token=([^;]*)/);
+  if (match && match[1]) return match[1];
+
+  // 2) URL参数中读取（首次注入）
   const p = new URLSearchParams(location.search);
   const t = p.get('token');
   if (t && t.startsWith('github_pat_')) {
-    localStorage.setItem('gh-push-token', t);
+    // 存入Cookie（1年有效期，全站可用）
+    document.cookie = 'gh-token=' + t + '; path=/; max-age=31536000; SameSite=Lax';
+    // 同时存localStorage（非PWA场景备用）
+    try { localStorage.setItem('gh-push-token', t); } catch(e) {}
     // 清除URL参数
     history.replaceState({}, '', location.pathname);
     return t;
   }
-  // 2) localStorage
-  return localStorage.getItem('gh-push-token') || '';
+
+  // 3) localStorage 备用
+  try { return localStorage.getItem('gh-push-token') || ''; } catch(e) { return ''; }
 }
 const GITHUB_DATA_FILE = 'https://api.github.com/repos/leean891016-prog/ai-todo/contents/push-data.json';
 
